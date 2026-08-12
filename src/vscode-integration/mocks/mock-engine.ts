@@ -118,6 +118,22 @@ export class MockAttributionEngine implements EngineLike {
     return state.ranges;
   }
 
+  /** Mirrors the real engine's `reload`: overwrites `docId` even if already
+   * tracked, unlike `open`. See `EngineLike.reload`'s doc comment. */
+  reload(docId: string, content: string, restore?: AttributedRange[]): AttributedRange[] {
+    const ranges =
+      restore && spanLength(restore) === content.length
+        ? restore.slice()
+        : content.length > 0
+          ? [{ startOffset: 0, endOffset: content.length, origin: null, tier: null, timestamp: Date.now() }]
+          : [];
+    const state: DocState = { content, ranges, history: new Map() };
+    this.docs.set(docId, state);
+    remember(state, hashContent(content));
+    this.notify(docId);
+    return state.ranges;
+  }
+
   close(docId: string): void {
     this.docs.delete(docId);
   }
