@@ -12,9 +12,7 @@
     "Other"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": ["onStartupFinished"],
   "contributes": {
     "commands": [
       {
@@ -79,9 +77,7 @@
         },
         "tourist.exclusionPolicy": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "default": [],
           "description": "Extra gitignore-style glob patterns to exclude from tracking, on top of .gitignore and the built-in defaults (node_modules/, build/dist output, .git/)."
         },
@@ -102,10 +98,7 @@
         },
         "tourist.knowledgeMap.claudeBackend": {
           "type": "string",
-          "enum": [
-            "cli",
-            "api-key"
-          ],
+          "enum": ["cli", "api-key"],
           "enumDescriptions": [
             "Ride on your already-logged-in Claude Code CLI session -- no separate API key to manage.",
             "Call the Anthropic API directly. Requires an API key, which you'll be prompted for once and which is stored in VS Code's secret storage, never in plain settings."
