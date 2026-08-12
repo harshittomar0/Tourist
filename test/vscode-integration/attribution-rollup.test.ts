@@ -44,6 +44,26 @@ describe("collectWorkspaceRollup", () => {
     expect(rollup.files).toEqual([]);
   });
 
+  it("REVIEW_SENIOR.md finding #5: reconciles character-offset (live) and line-index (persisted) units via getDocument, instead of summing them as if they were the same unit", async () => {
+    const engine = new MockAttributionEngine();
+    const persistence = new MockPersistence();
+
+    // Live/open doc: a single 40-character "ai" line -- one line's worth of AI content.
+    const text = "x".repeat(40);
+    engine.seedRanges("/repo/open.ts", text, [{ startOffset: 0, endOffset: 40, origin: "ai", tier: "1", timestamp: 1 }]);
+
+    // Persisted-only (closed, never opened this session) doc: pseudo-offsets
+    // from listPersisted are already 1-unit-per-line.
+    await persistence.save("/repo/closed.ts", "h", key, [{ startOffset: 0, endOffset: 1, origin: "human", tier: null, timestamp: 1 }]);
+
+    const getDocument = (docId: string) =>
+      docId === "/repo/open.ts" ? { positionAt: (offset: number) => ({ line: offset < 40 ? 0 : 1 }) } : undefined;
+
+    const rollup = await collectWorkspaceRollup({ engine, persistence, folders: [{ path: "/repo", key }], getDocument });
+    // Reconciled to line units: 1 ai line + 1 human line -- not 40 characters + 1 line summed as if comparable.
+    expect(rollup.total).toEqual({ ai: 1, human: 1, external: 0, total: 2 });
+  });
+
   it("scopes docIds to their own folder and never mixes two folders' totals", async () => {
     const engine = new MockAttributionEngine();
     const persistence = new MockPersistence();
