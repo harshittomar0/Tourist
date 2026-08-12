@@ -247,6 +247,30 @@ export class AttributionEngine {
     else this.suppressedWorkspaces.delete(workspaceId);
   }
 
+  // -- Enumeration + rename (added post-Phase-1, per PLAN1.md Part 2 §7 -----
+  // contract-gap fixes: the workspace-level view needs to enumerate every
+  // tracked document, open or closed, and a file rename must re-key this
+  // engine's own in-memory state in place rather than being worked around by
+  // the caller doing a close+reopen, which would silently drop history for
+  // any doc with no restorable snapshot in hand.) --------------------------
+
+  /** Every document identity this engine currently holds state for, tracked
+   * or untouched -- backs the workspace-level attribution view/panel. */
+  listTrackedDocIds(): string[] {
+    return [...this.docs.keys()];
+  }
+
+  /** Moves `oldDocId`'s live in-memory state (piece-table ranges, undo/redo
+   * history, the internal content mirror, and its snapshot-store baseline)
+   * to `newDocId` in place. A no-op if `oldDocId` isn't currently tracked. */
+  renameDocument(oldDocId: string, newDocId: string): void {
+    const state = this.docs.get(oldDocId);
+    if (!state) return;
+    this.docs.delete(oldDocId);
+    this.docs.set(newDocId, state);
+    this.snapshotStore.setBaseline(newDocId, state.content);
+  }
+
   // -- internals ---------------------------------------------------------
 
   private ensureDoc(docId: string): DocState {

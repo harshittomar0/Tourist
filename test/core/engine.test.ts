@@ -1,4 +1,4 @@
-import { test, describe } from "node:test";
+import { test, describe } from "vitest";
 import assert from "node:assert/strict";
 import { AttributionEngine } from "../../src/core/engine.ts";
 import { CorroborationStore } from "../../src/core/corroboration-store.ts";
@@ -136,7 +136,15 @@ describe("AttributionEngine -- live editing path", () => {
     });
     const reversed = engine2.getRanges("doc2");
 
-    assert.deepEqual(forward, reversed);
+    // Compare shape/classification, not `timestamp`: the untouched filler
+    // ranges' timestamp comes from each engine's own `open()` call
+    // internally defaulting to `Date.now()` (no timestamp parameter is
+    // exposed on `open`), so two independently-opened engines can
+    // legitimately differ there by a millisecond -- not what this test is
+    // asserting (order-independence of the classification itself).
+    const shapeOf = (ranges: ReturnType<AttributionEngine["getRanges"]>) =>
+      ranges.map((r) => [r.startOffset, r.endOffset, r.origin, r.tier]);
+    assert.deepEqual(shapeOf(forward), shapeOf(reversed));
   });
 });
 
@@ -188,5 +196,53 @@ describe("AttributionEngine -- whole-file-diff ingestion path (tracked-but-never
     const lines = ranges.map((r) => [r.origin, r.tier]);
     // "a" and "b" stay unmarked/whatever they were; only "c" is fresh.
     assert.deepEqual(lines[lines.length - 1], ["external", "3"]);
+  });
+});
+
+describe("AttributionEngine -- enumeration + rename (contract §2 additions)", () => {
+  test("listTrackedDocIds returns every open or diffed document identity", () => {
+    const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    engine.open("doc1", "hello");
+    engine.ingestWholeFileDiff({ docId: "doc2", newContent: "world", timestamp: 1 });
+    assert.deepEqual(new Set(engine.listTrackedDocIds()), new Set(["doc1", "doc2"]));
+  });
+
+  test("renameDocument moves live in-memory state (ranges + undo history) to the new docId in place", () => {
+    const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    engine.open("old.ts", "0123456789");
+    engine.pushChanges(insertBatch("old.ts", 0, "AI"));
+    const before = engine.getRanges("old.ts");
+
+    engine.renameDocument("old.ts", "new.ts");
+
+    assert.deepEqual(engine.getRanges("new.ts"), before);
+    assert.deepEqual(engine.getRanges("old.ts"), []);
+    assert.deepEqual(engine.listTrackedDocIds(), ["new.ts"]);
+
+    // Undo/redo history moved too -- a redo after rename still restores by
+    // content hash rather than losing history the way close+reopen would.
+    engine.pushChanges({
+      docId: "new.ts",
+      changes: [{ rangeOffset: 0, rangeLength: 2, text: "" }],
+      dirtyBefore: true,
+      dirtyAfter: true,
+      reason: "typed",
+      timestamp: 2,
+    });
+    const redone = engine.pushChanges({
+      docId: "new.ts",
+      changes: [{ rangeOffset: 0, rangeLength: 0, text: "AI" }],
+      dirtyBefore: true,
+      dirtyAfter: true,
+      reason: "redo",
+      timestamp: 3,
+    });
+    assert.deepEqual(redone, before);
+  });
+
+  test("renameDocument on an untracked docId is a no-op, not an error", () => {
+    const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    assert.doesNotThrow(() => engine.renameDocument("missing.ts", "also-missing.ts"));
+    assert.deepEqual(engine.listTrackedDocIds(), []);
   });
 });

@@ -1,4 +1,4 @@
-import { test, describe } from "node:test";
+import { test, describe } from "vitest";
 import assert from "node:assert/strict";
 import { classifyLiveChange, classifyWholeFileDiffSpan } from "../../src/core/tier-classifier.ts";
 import type { CorroborationSnapshot } from "../../src/core/corroboration-store.ts";
