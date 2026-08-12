@@ -11,15 +11,20 @@
  */
 import * as vscode from "vscode";
 import type { EngineLike, PersistenceLike } from "./contracts.ts";
-import { installHook, verifyHook } from "./hook-install.ts";
+import { installHook, verifyHook, type HookInstaller } from "./hook-install.ts";
 import * as settings from "./settings.ts";
 import type { WorkspaceAttributionProvider } from "./workspace-view.ts";
 
 export interface CommandDeps {
-  extensionPath: string;
   engine: EngineLike;
   persistence: PersistenceLike;
   workspaceView: WorkspaceAttributionProvider;
+  /** The single canonical hook-install/verify implementation (the same
+   * `FileHookLogReaderAdapter` instance wired into the engine for the Tier-1
+   * read path) -- see hook-install.ts's header comment for why there is now
+   * only one implementation of this, not two. */
+  hookInstaller: HookInstaller;
+  hookScriptPath: string;
   /** Re-renders decorations for every currently visible editor -- called
    * after anything that can change `AttributedRange[]` out from under an
    * open document (fix-line-attribution, a markers toggle). */
@@ -42,8 +47,8 @@ export function registerCommands(context: vscode.ExtensionContext, deps: Command
       deps.refreshVisibleDecorations();
     }),
 
-    vscode.commands.registerCommand("tourist.installHook", () => installHook(deps.extensionPath)),
-    vscode.commands.registerCommand("tourist.verifyHook", () => verifyHook(deps.extensionPath)),
+    vscode.commands.registerCommand("tourist.installHook", () => installHook(deps.hookInstaller, deps.hookScriptPath)),
+    vscode.commands.registerCommand("tourist.verifyHook", () => verifyHook(deps.hookInstaller, deps.hookScriptPath)),
 
     vscode.commands.registerCommand("tourist.openWorkspaceView", async () => {
       await deps.workspaceView.refresh();

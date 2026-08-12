@@ -37,9 +37,12 @@ export const DEFAULT_EXCLUDES: string[] = [
  * ".gitignore plus common excludes", not bit-for-bit `git check-ignore`
  * parity.
  */
-export function createExclusionPredicate(workspaceRoot: string): ExclusionPredicate {
+export function createExclusionPredicate(workspaceRoot: string, extraPatterns: readonly string[] = []): ExclusionPredicate {
   const ig = ignore();
   ig.add(DEFAULT_EXCLUDES);
+  // `tourist.exclusionPolicy` -- user-supplied extra .gitignore-style
+  // patterns, layered on top of the default excludes.
+  if (extraPatterns.length) ig.add(extraPatterns as string[]);
   try {
     ig.add(fs.readFileSync(path.join(workspaceRoot, ".gitignore"), "utf8"));
   } catch {
