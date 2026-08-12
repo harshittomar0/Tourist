@@ -16,7 +16,7 @@ interface HookRecord {
 
 function attributionDir(): string {
   const override = process.env.CLAUDE_CONFIG_DIR;
-  const base = override ? path.dirname(override) : path.join(os.homedir(), ".claude");
+  const base = override ? override : path.join(os.homedir(), ".claude");
   // Namespaced distinctly from tourist-raw's own `~/.claude/tourist/` so
   // both extensions can theoretically coexist installed side by side
   // without one's hook log clobbering the other's.

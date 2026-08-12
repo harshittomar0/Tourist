@@ -36,7 +36,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 
 const CONFIG_BASE = process.env.CLAUDE_CONFIG_DIR
-  ? path.dirname(process.env.CLAUDE_CONFIG_DIR)
+  ? process.env.CLAUDE_CONFIG_DIR
   : path.join(os.homedir(), ".claude");
 const ATTRIBUTION_DIR = path.join(CONFIG_BASE, "tourist-attribution");
 const PRE_DIR = path.join(ATTRIBUTION_DIR, "pre");
