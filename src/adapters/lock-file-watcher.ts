@@ -47,16 +47,14 @@ function matchesWorkspace(workspaceRoot: string, workspaceFolders: string[] | un
 }
 
 /**
- * TODO(Phase 0 experiment 2): this currently corroborates on lock-file
- * *existence* alone, matched to a workspace by `workspaceFolders`
- * containment. Experiment 2 determines whether a stale lock left behind by
- * a `SIGKILL`'d Claude Code session survives long enough to falsely
- * over-corroborate Tier 2a after the session is actually gone, and if so,
- * whether a `pid`-liveness check (`process.kill(pid, 0)`, which throws
- * ESRCH if the pid is dead, on the same machine) needs to be layered on top.
- * `checkPidLiveness` below implements that check and is wired in but
- * defaults to *off* (`pidLivenessCheck: false`) until experiment 2 confirms
- * it's actually needed -- flipping it on is a one-line change once it is.
+ * Corroborates on lock-file existence, matched to a workspace by
+ * `workspaceFolders` containment, plus a `pid`-liveness check
+ * (`process.kill(pid, 0)`, which throws ESRCH if the pid is dead, on the
+ * same machine). Defaults to *on* (`pidLivenessCheck: true`): spike/
+ * FINDINGS.md Experiment 2 confirmed a stale lock left behind by a
+ * `SIGKILL`'d Claude Code session is never auto-removed by anything and
+ * survives indefinitely, so without this check a dead session's lock file
+ * falsely corroborates Tier 2a forever (REVIEW_SENIOR.md finding #4).
  */
 export interface LockFileWatcherOptions {
   pidLivenessCheck?: boolean;
@@ -122,7 +120,7 @@ export class NodeLockFileWatcherAdapter implements LockFileWatcherAdapter {
     for (const entry of entries) {
       const contents = readLockFile(path.join(dir, entry));
       if (!contents) continue;
-      if (this.options.pidLivenessCheck && contents.pid !== undefined && !isPidAlive(contents.pid)) continue;
+      if ((this.options.pidLivenessCheck ?? true) && contents.pid !== undefined && !isPidAlive(contents.pid)) continue;
       for (const root of this.workspaceRoots) {
         if (matchesWorkspace(root, contents.workspaceFolders)) matchedRoots.add(root);
       }
