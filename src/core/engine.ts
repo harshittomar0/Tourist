@@ -91,17 +91,42 @@ export class AttributionEngine {
    * tourist-raw's `onOpen`. A no-op if the document is already open. */
   open(docId: string, initialContent: string, restore?: AttributedRange[]): AttributedRange[] {
     if (this.docs.has(docId)) return this.docs.get(docId)!.pieceTable.toRanges();
-
-    const pieceTable =
-      restore && rangesSpanLength(restore) === initialContent.length
-        ? PieceTable.fromRanges(restore)
-        : new PieceTable(initialContent.length, null, null, Date.now());
-
-    const state: DocState = { pieceTable, content: initialContent, history: new Map() };
+    const state = this.buildDocState(initialContent, restore);
     this.docs.set(docId, state);
     this.rememberHistory(state, hashContent(initialContent));
     this.snapshotStore.setBaseline(docId, initialContent);
-    return pieceTable.toRanges();
+    return state.pieceTable.toRanges();
+  }
+
+  /**
+   * Forces `docId`'s live state to `content`/`restore`, overwriting whatever
+   * the engine currently believes about that document -- unlike `open()`,
+   * which no-ops once a doc is tracked. For an open document whose on-disk
+   * content just changed for a reason the live-editing path never saw (a
+   * git checkout or stash pop reverting it while it stayed open), persisted
+   * history keyed by content hash is the only source of truth left, and
+   * nothing else can get it back into the live piece table.
+   *
+   * Deliberately does NOT restamp `restore`'s ranges with `Date.now()` --
+   * `PieceTable.fromRanges` (via `buildDocState`) keeps each range's own
+   * `timestamp` exactly as persisted. That matters for
+   * `reclassifyRecentDiskWrites`'s `GIT_OP_RETROACTIVE_WINDOW_MS` grace
+   * window (see its doc comment): if a reload happens to land inside a
+   * later suppression window, restamping would make genuinely old,
+   * legitimately-persisted ai/external attribution look "just written" and
+   * get retroactively nulled right back out -- exactly the fight this
+   * method must not pick with that fix. Callers (extension.ts) are also
+   * responsible for not calling this over a live, hook-confirmed tier-"1"
+   * write still in flight -- see extension.ts's `isHookConfirmedWrite`
+   * check at its one call site gated on the disk-write signal.
+   */
+  reload(docId: string, content: string, restore?: AttributedRange[]): AttributedRange[] {
+    const state = this.buildDocState(content, restore);
+    this.docs.set(docId, state);
+    this.rememberHistory(state, hashContent(content));
+    this.snapshotStore.setBaseline(docId, content);
+    this.notify(docId);
+    return state.pieceTable.toRanges();
   }
 
   close(docId: string): void {
@@ -314,6 +339,17 @@ export class AttributionEngine {
   }
 
   // -- internals ---------------------------------------------------------
+
+  /** Shared by `open()` and `reload()`: a fresh unmarked table over
+   * `content`, or `restore` rebuilt verbatim (timestamps included) when it
+   * spans exactly `content.length`. */
+  private buildDocState(content: string, restore?: AttributedRange[]): DocState {
+    const pieceTable =
+      restore && rangesSpanLength(restore) === content.length
+        ? PieceTable.fromRanges(restore)
+        : new PieceTable(content.length, null, null, Date.now());
+    return { pieceTable, content, history: new Map() };
+  }
 
   private ensureDoc(docId: string): DocState {
     let state = this.docs.get(docId);

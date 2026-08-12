@@ -32,11 +32,14 @@ import {
 } from "./adapters/index.ts";
 import { AttributionEngine } from "./core/engine.ts";
 import { CorroborationStore } from "./core/corroboration-store.ts";
+import { hashContent } from "./core/index.ts";
+import { BranchWatcher } from "./persistence/index.ts";
 import type { VscodeGitAPI, VscodeGitRepository } from "./persistence/vscodeGitTypes.ts";
 import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
 import type { AttributedRange, EngineLike, PersistenceLike, RepoBranchKey } from "./vscode-integration/contracts.ts";
 import { refreshDecorations } from "./vscode-integration/decorations.ts";
+import { reconcileAfterGitChange, type OpenDocSnapshot } from "./vscode-integration/git-reload.ts";
 import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map/commands.ts";
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
 import * as settings from "./vscode-integration/settings.ts";
@@ -283,6 +286,65 @@ export function activate(context: vscode.ExtensionContext): void {
     dirtyTracker.onOpen(docId, doc.isDirty);
   }
 
+  // ---- Git-caused reload (branch switch / stash pop data-loss fix) ----
+  // `restoreFor` above only ever runs once, at onDidOpenTextDocument time --
+  // nothing re-invokes it when a still-open document's on-disk content
+  // changes because of a git operation (checkout, stash pop, ...) rather
+  // than a live edit, and `folderKeyCache` (below) never invalidates on a
+  // branch change either, so a save/load after switching branches can
+  // silently keep using the previous branch's (repoRoot, branch) key. Both
+  // are closed by re-running `restoreFor` (through a fresh key) and
+  // `engine.reload` for the affected open document(s) -- see
+  // `git-reload.ts`'s header comment for why that sequencing lives there
+  // instead of inline here.
+  function openDocSnapshotsUnder(folderPaths: readonly string[]): {
+    snapshots: OpenDocSnapshot[];
+    docsById: Map<string, vscode.TextDocument>;
+  } {
+    const snapshots: OpenDocSnapshot[] = [];
+    const docsById = new Map<string, vscode.TextDocument>();
+    for (const doc of vscode.workspace.textDocuments) {
+      if (doc.uri.scheme !== "file" || doc.isDirty) continue;
+      const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+      if (!folder || !folderPaths.includes(folder.uri.fsPath)) continue;
+      const docId = docIdFor(doc.uri);
+      snapshots.push({ docId, folderPath: folder.uri.fsPath, text: doc.getText() });
+      docsById.set(docId, doc);
+    }
+    return { snapshots, docsById };
+  }
+
+  async function reloadAfterGitChange(affectedFolderPaths: readonly string[]): Promise<void> {
+    const { snapshots, docsById } = openDocSnapshotsUnder(affectedFolderPaths);
+    await reconcileAfterGitChange(
+      {
+        folderKeyCache,
+        restore: (docId) => restoreFor(docsById.get(docId)!),
+        reloadEngine: (docId, text, restore) => void engine.reload(docId, text, restore),
+      },
+      affectedFolderPaths,
+      snapshots
+    );
+    for (const editor of vscode.window.visibleTextEditors) {
+      if (docsById.has(docIdFor(editor.document.uri))) refreshEditorDecorations(editor);
+    }
+    await refreshWorkspaceState();
+  }
+
+  // BranchWatcher reuses the *same* `gitApi` repositories already tracked
+  // for git-op suppression above -- diffs `repo.state.HEAD` (debounced) and
+  // only calls back on a real branch change, per its own doc comment.
+  const branchWatcher = new BranchWatcher();
+  if (gitApi) {
+    branchWatcher.watchVscodeGitApi(gitApi, (change) => {
+      const affected = (vscode.workspace.workspaceFolders ?? [])
+        .map((f) => f.uri.fsPath)
+        .filter((root) => root === change.repoRoot || root.startsWith(change.repoRoot + path.sep));
+      if (affected.length) void reloadAfterGitChange(affected);
+    });
+  }
+  context.subscriptions.push(branchWatcher);
+
   // ---- Initial activation state --------------------------------------
   void (async () => {
     folderScopesSyncSnapshot = await folderScopes();
@@ -324,6 +386,27 @@ export function activate(context: vscode.ExtensionContext): void {
       scheduleSave(event.document);
       for (const editor of vscode.window.visibleTextEditors) {
         if (editor.document === event.document) refreshEditorDecorations(editor);
+      }
+
+      // A clean-before-and-after change during an active git-op suppression
+      // window (see `markGitActivity` above) can only be git reverting this
+      // document's on-disk content -- a stash pop, rebase, or any other git
+      // op that isn't a branch change (BranchWatcher above already handles
+      // those). Re-fetch persisted, content-hash-keyed attribution for the
+      // *new* content instead of leaving it as whatever `pushChanges` just
+      // (correctly) left unmarked. Excludes a hook-confirmed tier-1 write --
+      // a real, just-verified Claude Code edit racing the same suppression
+      // window is not a git revert, and reloading over it would blow away
+      // attribution persistence hasn't caught up to yet (it saves on a
+      // debounce), the same tier-1 carve-out `reclassifyRecentDiskWrites`
+      // (engine.ts, tourist-18's fix) makes for the identical reason.
+      const isDiskWrite = !batch.dirtyBefore && !batch.dirtyAfter;
+      const workspaceRoot = workspaceRootForPath(event.document.uri.fsPath);
+      if (isDiskWrite && workspaceRoot && gitSuppressTimers.has(workspaceRoot)) {
+        const isHookConfirmedWrite = hookLogReader.matchesContent(docId, hashContent(event.document.getText()));
+        if (!isHookConfirmedWrite) {
+          void reloadAfterGitChange([workspaceRoot]).then(() => void statusBar.refresh());
+        }
       }
     }),
 

@@ -40,6 +40,13 @@ import type { AttributedRange, Disposable, NormalizedChangeBatch, WholeFileDiffI
 // existed; renameDocument was added during consolidation).
 export interface EngineLike {
   open(docId: string, initialContent: string, restore?: AttributedRange[]): AttributedRange[];
+  /** Overwrites `docId`'s live state with `content`/`restore`, even if the
+   * doc is already tracked (unlike `open`, which no-ops in that case). Used
+   * when a document's on-disk content changed for a reason the live-editing
+   * path never saw -- a git checkout or stash pop reverting an open,
+   * unmodified document -- so persisted, content-hash-keyed history is the
+   * only way to get the live view back in sync. */
+  reload(docId: string, content: string, restore?: AttributedRange[]): AttributedRange[];
   close(docId: string): void;
   save(docId: string): void;
   pushChanges(batch: NormalizedChangeBatch): AttributedRange[];

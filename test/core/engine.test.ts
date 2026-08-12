@@ -272,6 +272,89 @@ describe("AttributionEngine -- whole-file-diff ingestion path (tracked-but-never
   });
 });
 
+describe("AttributionEngine -- reload (branch-switch / stash-pop data-loss fix)", () => {
+  test("reload overwrites an already-tracked doc's ranges, unlike open() which no-ops", () => {
+    const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    engine.open("doc1", "hello");
+    engine.pushChanges(insertBatch("doc1", 5, " world", { dirtyBefore: true, dirtyAfter: true }));
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [
+      ["null", "null"],
+      ["human", "null"],
+    ]);
+
+    // open() on an already-tracked doc is a documented no-op -- this is
+    // exactly why extension.ts could never use it to pick up a git-caused
+    // content revert on a still-open document.
+    const viaOpen = engine.open("doc1", "hello world", [
+      { startOffset: 0, endOffset: 11, origin: "ai", tier: "2a", timestamp: 1 },
+    ]);
+    assert.deepEqual(originsOf(viaOpen), [
+      ["null", "null"],
+      ["human", "null"],
+    ]);
+
+    const viaReload = engine.reload("doc1", "hello world", [
+      { startOffset: 0, endOffset: 11, origin: "ai", tier: "2a", timestamp: 1 },
+    ]);
+    assert.deepEqual(originsOf(viaReload), [["ai", "2a"]]);
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "2a"]]);
+  });
+
+  test("reload with no matching restore falls back to a fresh unmarked table, not the stale live one", () => {
+    const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    engine.open("doc1", "hello");
+    engine.pushChanges(insertBatch("doc1", 0, "AI wrote this", { dirtyBefore: false, dirtyAfter: false }));
+    assert.ok(engine.getRanges("doc1").some((r) => r.origin !== null));
+
+    // Simulates switching to a branch with no persisted history for this
+    // content: nothing to restore.
+    const reloaded = engine.reload("doc1", "different content", undefined);
+    assert.deepEqual(originsOf(reloaded), [["null", "null"]]);
+  });
+
+  test("reload preserves each restored range's own timestamp, so it survives a later retroactive git-op reclassification (tourist-18 interaction)", () => {
+    const store = new CorroborationStore();
+    const engine = new AttributionEngine({ corroborationStore: store, resolveWorkspaceId: () => "ws1" });
+    engine.open("doc1", "");
+
+    // Attribution genuinely persisted a while ago (well outside the 4s
+    // retroactive-reclassification window) -- e.g. restored after switching
+    // back to a branch last touched minutes ago.
+    const oldTimestamp = Date.now() - 60_000;
+    engine.reload("doc1", "old ai content", [
+      { startOffset: 0, endOffset: "old ai content".length, origin: "ai", tier: "2a", timestamp: oldTimestamp },
+    ]);
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "2a"]]);
+
+    // A git op is detected around the same time this reload happens (e.g.
+    // the branch-switch that triggered the reload also fires
+    // repo.state.onDidChange, arriving at markGitActivity moments later).
+    engine.setGitOpSuppression("ws1", true);
+
+    // Must NOT be wiped by reclassifyRecentDiskWrites: had reload() instead
+    // stamped these ranges with Date.now(), they'd look like a
+    // just-classified heuristic guess caught in the race window and get
+    // retroactively nulled -- exactly the fight with tourist-18's fix this
+    // method's doc comment calls out.
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "2a"]]);
+  });
+
+  test("sanity check: a reload landing with a genuinely recent timestamp inside the window IS reclassified -- proving the above passes because of preserved timestamps, not because reload is somehow immune", () => {
+    const store = new CorroborationStore();
+    const engine = new AttributionEngine({ corroborationStore: store, resolveWorkspaceId: () => "ws1" });
+    engine.open("doc1", "");
+
+    const recentTimestamp = Date.now() - 500; // well inside GIT_OP_RETROACTIVE_WINDOW_MS (4s)
+    engine.reload("doc1", "recent ai content", [
+      { startOffset: 0, endOffset: "recent ai content".length, origin: "ai", tier: "2a", timestamp: recentTimestamp },
+    ]);
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "2a"]]);
+
+    engine.setGitOpSuppression("ws1", true);
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["null", "null"]]);
+  });
+});
+
 describe("AttributionEngine -- enumeration + rename (contract §2 additions)", () => {
   test("listTrackedDocIds returns every open or diffed document identity", () => {
     const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
