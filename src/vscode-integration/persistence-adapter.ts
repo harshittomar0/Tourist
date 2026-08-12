@@ -105,36 +105,127 @@ function attributionTierToTier(tier: AttributionTier): Tier | null {
   return "3";
 }
 
-/** Converts one offset-based `AttributedRange` (Agent A's shape) into Agent
- * B's line-based, content-hash-anchored shape, given the document's current
- * full text. Returns `undefined` for unmarked (`origin: null`) ranges --
- * Agent B's persisted store has no concept of "unmarked," matching how
- * tourist-raw never persisted untouched content either. */
-function toPersistenceRange(docId: string, currentText: string, offsets: readonly number[], range: AttributedRange): PersistenceRange | undefined {
-  if (range.origin === null || range.endOffset <= range.startOffset) return undefined;
-  const startLine = offsetToLine(offsets, range.startOffset);
-  const endLine = offsetToLine(offsets, Math.max(range.startOffset, range.endOffset - 1));
-  // Hash the same whole-line-boundary text `fromPersistedEntry` reconstructs
-  // on load (offsets[startLine] .. offsets[endLine + 1]), not the range's
-  // exact character substring -- the persisted `range` is line-grained
-  // (RangeSpan has no column), so hashing a narrower character-precise
-  // substring here would never match what load recomputes from line
-  // boundaries alone, silently dropping any range that doesn't happen to
-  // span whole lines (REVIEW_SENIOR.md finding #2).
-  const text = currentText.slice(offsets[startLine], offsets[endLine + 1] ?? currentText.length);
-  const now = range.timestamp;
-  return {
-    id: randomUUID(),
-    fsPath: docId,
-    range: { startLine, endLine },
-    text,
-    attribution: {
-      author: mapOriginToAuthor(range.origin),
-      tier: mapToAttributionTier(range.origin, range.tier),
-      createdAt: now,
-      updatedAt: now,
-    },
+/**
+ * Resolves one dominant (origin, tier) per line from possibly sub-line-
+ * granular offset ranges, character-weighted (the origin covering the most
+ * characters of that line wins; ties broken by the later timestamp).
+ *
+ * Required because the persisted schema is strictly whole-line (v1's locked
+ * scope, see this file's header comment): two *different*-origin ranges that
+ * share a line -- routine for a live per-keystroke engine, e.g. a human
+ * tweaking one character in the middle of an AI-written line -- previously
+ * each rounded independently to the *same* {startLine, endLine} span, and
+ * `toPersistenceRange` hashed the identical whole-line text for both,
+ * producing two `PersistedEntry`s with an identical `contentHash`.
+ * `upsertByContentHash` (store.ts) keys by that hash, so the later range in
+ * array order silently clobbered the earlier one for that line -- observed
+ * live as a `git stash` round trip on an already-attributed file collapsing
+ * a mixed human/ai line entirely into one origin, and getting worse on
+ * repeated cycles as which range landed last kept shifting. Resolving one
+ * winner per line *before* building persistence ranges means at most one
+ * entry -- and one contentHash -- is ever produced per line, so the
+ * collision can't happen.
+ */
+function resolveLineOrigins(
+  ranges: readonly AttributedRange[],
+  offsets: readonly number[]
+): Array<{ origin: Origin; tier: Tier | null; timestamp: number } | undefined> {
+  const lineCount = Math.max(0, offsets.length - 1);
+  const tallyByLine = new Map<number, Map<string, { origin: Origin; tier: Tier | null; timestamp: number; length: number }>>();
+
+  for (const range of ranges) {
+    if (range.origin === null || range.endOffset <= range.startOffset) continue;
+    const startLine = offsetToLine(offsets, range.startOffset);
+    const endLine = offsetToLine(offsets, Math.max(range.startOffset, range.endOffset - 1));
+    for (let line = startLine; line <= endLine; line++) {
+      const lineStart = offsets[line];
+      const lineEnd = offsets[line + 1] ?? currentTextLength(offsets);
+      const overlapLength = Math.min(range.endOffset, lineEnd) - Math.max(range.startOffset, lineStart);
+      if (overlapLength <= 0) continue;
+      let perLine = tallyByLine.get(line);
+      if (!perLine) {
+        perLine = new Map();
+        tallyByLine.set(line, perLine);
+      }
+      const key = `${range.origin}:${range.tier ?? ""}`;
+      const existing = perLine.get(key);
+      if (existing) {
+        existing.length += overlapLength;
+        if (range.timestamp > existing.timestamp) existing.timestamp = range.timestamp;
+      } else {
+        perLine.set(key, { origin: range.origin, tier: range.tier, timestamp: range.timestamp, length: overlapLength });
+      }
+    }
+  }
+
+  const result: Array<{ origin: Origin; tier: Tier | null; timestamp: number } | undefined> = new Array(lineCount);
+  for (const [line, perLine] of tallyByLine) {
+    let winner: { origin: Origin; tier: Tier | null; timestamp: number; length: number } | undefined;
+    for (const candidate of perLine.values()) {
+      if (
+        !winner ||
+        candidate.length > winner.length ||
+        (candidate.length === winner.length && candidate.timestamp > winner.timestamp)
+      ) {
+        winner = candidate;
+      }
+    }
+    if (winner) result[line] = { origin: winner.origin, tier: winner.tier, timestamp: winner.timestamp };
+  }
+  return result;
+}
+
+function currentTextLength(offsets: readonly number[]): number {
+  return offsets[offsets.length - 1] ?? 0;
+}
+
+/** Merges `resolveLineOrigins`'s per-line winners into whole-line
+ * `PersistenceRange`s, coalescing consecutive lines that share the same
+ * (origin, tier) into a single span/entry, same as the engine's own
+ * `mergeAdjacent` does for piece-table pieces. */
+function toPersistenceRanges(docId: string, currentText: string, offsets: readonly number[], ranges: readonly AttributedRange[]): PersistenceRange[] {
+  const lineOrigins = resolveLineOrigins(ranges, offsets);
+  const result: PersistenceRange[] = [];
+  let spanStart = -1;
+  let spanTimestamp = 0;
+  let spanKey: { origin: Origin; tier: Tier | null } | undefined;
+
+  const flush = (endLine: number) => {
+    if (spanStart === -1 || !spanKey) return;
+    const text = currentText.slice(offsets[spanStart], offsets[endLine + 1] ?? currentText.length);
+    result.push({
+      id: randomUUID(),
+      fsPath: docId,
+      range: { startLine: spanStart, endLine },
+      text,
+      attribution: {
+        author: mapOriginToAuthor(spanKey.origin),
+        tier: mapToAttributionTier(spanKey.origin, spanKey.tier),
+        createdAt: spanTimestamp,
+        updatedAt: spanTimestamp,
+      },
+    });
   };
+
+  for (let line = 0; line < lineOrigins.length; line++) {
+    const winner = lineOrigins[line];
+    const sameAsSpan = winner && spanKey && winner.origin === spanKey.origin && winner.tier === spanKey.tier;
+    if (winner && sameAsSpan) {
+      if (winner.timestamp > spanTimestamp) spanTimestamp = winner.timestamp;
+      continue;
+    }
+    if (spanStart !== -1) flush(line - 1);
+    if (winner) {
+      spanStart = line;
+      spanTimestamp = winner.timestamp;
+      spanKey = { origin: winner.origin, tier: winner.tier };
+    } else {
+      spanStart = -1;
+      spanKey = undefined;
+    }
+  }
+  if (spanStart !== -1) flush(lineOrigins.length - 1);
+  return result;
 }
 
 /** Reverse of `toPersistenceRange`, validating that the entry's content hash
@@ -215,9 +306,7 @@ export class RealPersistenceAdapter implements PersistenceLike {
 
   async save(docId: string, _contentHash: string, key: RepoBranchKey, ranges: AttributedRange[], currentText: string): Promise<void> {
     const offsets = lineStartOffsets(currentText);
-    const persistenceRanges = ranges
-      .map((r) => toPersistenceRange(docId, currentText, offsets, r))
-      .filter((r): r is PersistenceRange => r !== undefined);
+    const persistenceRanges = toPersistenceRanges(docId, currentText, offsets, ranges);
     await this.manager.record(key, persistenceRanges);
   }
 
