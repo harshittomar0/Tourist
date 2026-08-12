@@ -39,6 +39,7 @@ import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
 import type { AttributedRange, EngineLike, PersistenceLike, RepoBranchKey } from "./vscode-integration/contracts.ts";
 import { refreshDecorations } from "./vscode-integration/decorations.ts";
+import { resolveGitApi } from "./vscode-integration/git-extension.ts";
 import { reconcileAfterGitChange, type OpenDocSnapshot } from "./vscode-integration/git-reload.ts";
 import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map/commands.ts";
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
@@ -83,8 +84,18 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const engine: EngineLike = realEngine;
 
-  const gitExtension = vscode.extensions.getExtension("vscode.git");
-  const gitApi: VscodeGitAPI | undefined = gitExtension?.exports?.getAPI?.(1);
+  // `vscode.Extension.exports` is a getter that throws (not returns
+  // undefined) if read before that extension finishes activating -- a real
+  // race with `vscode.git`'s own `*` activation event when Tourist itself
+  // activates earlier via its contributed view's auto-added
+  // `onView:tourist.workspaceAttribution` event. `resolveGitApi` catches
+  // that throw so a slow-to-activate git extension degrades to "no git
+  // integration this session" instead of crashing all of `activate()`.
+  const gitApi: VscodeGitAPI | undefined = resolveGitApi<VscodeGitAPI>(
+    (id) => vscode.extensions.getExtension(id),
+    "vscode.git",
+    1
+  );
   const persistence: PersistenceLike = new RealPersistenceAdapter({
     baseDir: vscode.Uri.joinPath(context.globalStorageUri, "attribution").fsPath,
     retentionDays: settings.attributionRetentionDays(),
