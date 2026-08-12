@@ -1,0 +1,182 @@
+{
+  "tech": [
+    {
+      "label": "Python",
+      "provenance": "ai",
+      "proficiency": 2,
+      "children": [
+        {
+          "label": "Core language fundamentals",
+          "provenance": "ai",
+          "proficiency": 2,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "349b2b0e71da",
+              "detail": "Defines greet() and add() functions and a Calculator class using standard Python syntax"
+            },
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "Adds power(), isprime(), print_table() using loops (range/for), modulo, exponentiation (**), and f-strings"
+            },
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "Adds sub() and hello() functions using basic print() calls"
+            }
+          ]
+        },
+        {
+          "label": "Object-Oriented Programming (classes)",
+          "provenance": "ai",
+          "proficiency": 2,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "349b2b0e71da",
+              "detail": "Defines Calculator class with __init__ setting self.total and an add() method that mutates and returns instance state"
+            }
+          ]
+        }
+      ],
+      "latent": [],
+      "evidence": [
+        {
+          "source": "git",
+          "ref": "349b2b0e71da",
+          "detail": "sample.py authored in Python with functions and a class"
+        },
+        {
+          "source": "git",
+          "ref": "685ba23f22e3",
+          "detail": "Continued Python development in same file"
+        },
+        {
+          "source": "git",
+          "ref": "7cfda37f4869",
+          "detail": "Continued Python development in same file"
+        }
+      ]
+    }
+  ],
+  "cs": [
+    {
+      "label": "Algorithms & Complexity",
+      "provenance": "ai",
+      "proficiency": 2,
+      "children": [
+        {
+          "label": "Primality testing",
+          "provenance": "ai",
+          "proficiency": 2,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "isprime(n) implemented with an int(n**0.5)+1 bound and step-by-2 loop, a standard trial-division optimization over naive O(n) checking"
+            }
+          ]
+        }
+      ],
+      "latent": [],
+      "evidence": [
+        {
+          "source": "git",
+          "ref": "685ba23f22e3",
+          "detail": "isprime() bounds its divisor search at sqrt(n) and skips even divisors, showing awareness of reducing check count below linear scan"
+        }
+      ]
+    }
+  ],
+  "practice": [
+    {
+      "label": "Code Quality & Craft",
+      "provenance": "ai",
+      "proficiency": 1,
+      "children": [
+        {
+          "label": "PR / commit hygiene",
+          "provenance": "ai",
+          "proficiency": 1,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "Commit message is 'do noting' — non-descriptive of the actual change"
+            },
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "Commit message is 'xyz' — non-descriptive of the actual change"
+            }
+          ]
+        },
+        {
+          "label": "Code churn / rework",
+          "provenance": "ai",
+          "proficiency": 1,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "Changes add(a,b) returning a+b into add(x,y) returning x-y, despite the function name implying addition"
+            },
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "Reverts add() back to x+y, then removes the just-added isprime() and print_table() functions again while inserting an incomplete sub() definition"
+            }
+          ]
+        }
+      ],
+      "latent": [],
+      "evidence": [
+        {
+          "source": "git",
+          "ref": "7cfda37f4869",
+          "detail": "Commit titled 'do noting' leaves sample.py with a bodyless sub() function directly followed by a syntax-invalid line ('print(x) cdxsfcm') inside hello()"
+        }
+      ]
+    },
+    {
+      "label": "Testing Discipline",
+      "provenance": "ai",
+      "proficiency": 1,
+      "children": [
+        {
+          "label": "Pre-commit verification",
+          "provenance": "ai",
+          "proficiency": 1,
+          "children": [],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "Committed code containing 'print(x) cdxsfcm', which is not valid Python and would fail on execution, indicating the file was not run before committing"
+            }
+          ]
+        }
+      ],
+      "latent": [],
+      "evidence": [
+        {
+          "source": "git",
+          "ref": "7cfda37f4869",
+          "detail": "Syntax-broken line and a function with no body were left in sample.py at commit time, suggesting no execution or test pass before commit"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proficiency indicators — comparison mockup</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-critical: #d03b3b;
+    --target-mark: #4a3aa7;
+    display: block;
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  html[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --target-mark: #9085e9;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .page { max-width: 980px; margin:0 auto; padding: 28px 24px 64px; }
+
+  header.top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom: 20px; }
+  header.top h1 { font-size:19px; margin:0 0 4px; }
+  header.top p { margin:0; color:var(--text-secondary); font-size:13px; max-width:640px; }
+  .theme-select { border:1px solid var(--border); background:var(--surface-1); color:var(--text-secondary); font-size:12px; padding:6px 10px; border-radius:6px; cursor:pointer; }
+
+  .legend {
+    display:flex; flex-wrap:wrap; gap:18px; font-size:12px; color:var(--text-secondary);
+    background:var(--surface-1); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:20px;
+  }
+  .legend .grp { display:flex; align-items:center; gap:7px; }
+
+  h2 { font-size:15px; margin: 30px 0 4px; }
+  .sub { color:var(--text-secondary); font-size:12.5px; margin: 0 0 14px; }
+
+  table.compare { width:100%; border-collapse:collapse; background:var(--surface-1); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  table.compare th, table.compare td { padding:10px 14px; border-bottom:1px solid var(--gridline); text-align:left; vertical-align:middle; }
+  table.compare th { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-muted); font-weight:600; }
+  table.compare tr:last-child td { border-bottom:none; }
+  table.compare td.node-label { font-size:13px; }
+  table.compare td.node-label .sub-note { display:block; font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+  .buildup-row { display:flex; align-items:center; gap:14px; padding:10px 14px; border-bottom:1px solid var(--gridline); background:var(--surface-1); }
+  .buildup-row:first-child { border-radius:10px 10px 0 0; }
+  .buildup-row:last-child { border-radius:0 0 10px 10px; border-bottom:none; }
+  .buildup-wrap { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .buildup-tag { font-size:11px; color:var(--text-muted); width:150px; flex:none; }
+  .buildup-label { font-size:13px; width:150px; flex:none; }
+
+  /* ---- component: dots (baseline) ---- */
+  .dots { display:inline-flex; gap:3px; align-items:center; }
+  .dot { width:9px; height:9px; border-radius:50%; border:1.5px solid var(--text-muted); background:transparent; }
+  .dot.filled { background:var(--text-secondary); border-color:var(--text-secondary); }
+
+  /* ---- component: bullet cells + target caret ---- */
+  .bullet { position:relative; display:inline-flex; gap:3px; align-items:center; padding-top:8px; }
+  .cell { width:11px; height:11px; border-radius:3px; border:1.5px solid var(--text-muted); background:transparent; }
+  .cell.filled { background:var(--text-secondary); border-color:var(--text-secondary); }
+  .caret { position:absolute; top:0; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:6px solid var(--target-mark); transform:translateX(-50%); }
+
+  /* ---- component: trend glyph + delta ---- */
+  .trend { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; width:34px; }
+  .trend.up { color: var(--status-good); }
+  .trend.down { color: var(--status-critical); }
+  .trend.flat { color: var(--text-muted); }
+
+  /* ---- component: confidence signal-bars ---- */
+  .signal { display:inline-flex; align-items:flex-end; gap:1.5px; height:9px; }
+  .signal i { display:block; width:3px; border-radius:1px; background:var(--gridline); }
+  .signal i.on { background:var(--text-secondary); }
+  .signal i:nth-child(1) { height:4px; }
+  .signal i:nth-child(2) { height:6.5px; }
+  .signal i:nth-child(3) { height:9px; }
+
+  /* ---- component: recency badge (only rendered when stale) ---- */
+  .stale-badge { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; color:var(--text-muted); }
+  .stale-badge svg { display:block; }
+
+  .composite { display:inline-flex; align-items:center; gap:8px; }
+
+  .col-hint { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="page">
+
+    <header class="top">
+      <div>
+        <h1>Proficiency indicators — comparison mockup</h1>
+        <p>Research-backed alternatives to the plain 5-dot rating, extending it rather than replacing it. Nothing here is wired to real data yet — this is purely "how would it look."</p>
+      </div>
+      <select class="theme-select" id="themeSelect">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </header>
+
+    <div class="legend">
+      <div class="grp"><span class="bullet"><span class="caret" style="position:static;transform:none;border-left-width:4px;border-right-width:4px;border-top-width:5px;"></span></span> Target marker — caret sits above the cell you're aiming for</div>
+      <div class="grp"><span class="trend up">▲+1</span> Trend — direction + change since last check-in</div>
+      <div class="grp"><span class="signal"><i class="on"></i><i class="on"></i><i></i></span> Confidence — how much evidence backs this number (more bars = more evidence)</div>
+      <div class="grp"><span class="stale-badge"><svg width="11" height="11" viewBox="0 0 11 11"><circle cx="5.5" cy="5.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 3v2.5l1.8 1" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg> 95d</span> Recency — only shown when stale; silence means "recently active"</div>
+    </div>
+
+    <h2>1. Build-up: one node, one layer at a time</h2>
+    <p class="sub">Node: "Celery / async tasks" — current proficiency 2, target 3, confirmed via 4 commits over the last 2 weeks but trending down from a peak of 3 last month.</p>
+    <div class="buildup-wrap">
+      <div class="buildup-row">
+        <span class="buildup-tag">Today (baseline)</span>
+        <span class="dots">
+          <span class="dot filled"></span><span class="dot filled"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </span>
+        <span class="col-hint">← current level only. No target, no trend, no confidence, no recency.</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-tag">+ target marker</span>
+        <span class="bullet">
+          <span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+          <span class="caret" style="left:38px;"></span>
+        </span>
+        <span class="col-hint">← now you can see the gap: 2 of 5, aiming for 3.</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-tag">+ trend</span>
+        <span class="composite">
+          <span class="bullet">
+            <span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="caret" style="left:38px;"></span>
+          </span>
+          <span class="trend down">▼−1</span>
+        </span>
+        <span class="col-hint">← was at 3 last month, dropped to 2 — regressing, not just "below target."</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-tag">+ confidence</span>
+        <span class="composite">
+          <span class="bullet">
+            <span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="caret" style="left:38px;"></span>
+          </span>
+          <span class="trend down">▼−1</span>
+          <span class="signal"><i class="on"></i><i class="on"></i><i></i></span>
+        </span>
+        <span class="col-hint">← 2 bars: a handful of commits, not a huge sample — moderate confidence.</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-tag">+ recency (not stale here)</span>
+        <span class="composite">
+          <span class="bullet">
+            <span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="caret" style="left:38px;"></span>
+          </span>
+          <span class="trend down">▼−1</span>
+          <span class="signal"><i class="on"></i><i class="on"></i><i></i></span>
+        </span>
+        <span class="col-hint">← no clock badge appears — this was touched 3 days ago, so recency stays silent.</span>
+      </div>
+    </div>
+
+    <h2>2. Same composite, across different real-ish nodes</h2>
+    <p class="sub">Baseline (today's UI) vs. the full composite indicator, for a few nodes with different stories.</p>
+    <table class="compare">
+      <thead>
+        <tr><th>Node</th><th>Baseline (today)</th><th>Composite (proposed)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="node-label">Django<span class="sub-note">confirmed, stable, well-exercised</span></td>
+          <td><span class="dots"><span class="dot filled"></span><span class="dot filled"></span><span class="dot filled"></span><span class="dot filled"></span><span class="dot"></span></span></td>
+          <td>
+            <span class="composite">
+              <span class="bullet">
+                <span class="cell filled"></span><span class="cell filled"></span><span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span>
+                <span class="caret" style="left:53px;"></span>
+              </span>
+              <span class="trend flat">▬0</span>
+              <span class="signal"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td class="node-label">Kubernetes debugging<span class="sub-note">declared gap, role expects level 3</span></td>
+          <td><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></td>
+          <td>
+            <span class="composite">
+              <span class="bullet">
+                <span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+                <span class="caret" style="left:38px;"></span>
+              </span>
+              <span class="trend flat">▬0</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td class="node-label">Testing (pytest)<span class="sub-note">confirmed at 3, but untouched in 95 days</span></td>
+          <td><span class="dots"><span class="dot filled"></span><span class="dot filled"></span><span class="dot filled"></span><span class="dot"></span><span class="dot"></span></span></td>
+          <td>
+            <span class="composite">
+              <span class="bullet">
+                <span class="cell filled"></span><span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span>
+                <span class="caret" style="left:24px;"></span>
+              </span>
+              <span class="trend flat">▬0</span>
+              <span class="signal"><i class="on"></i><i class="on"></i><i></i></span>
+              <span class="stale-badge"><svg width="11" height="11" viewBox="0 0 11 11"><circle cx="5.5" cy="5.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 3v2.5l1.8 1" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg> 95d</span>
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td class="node-label">State management (Redux)<span class="sub-note">AI-inferred, single PR, rising</span></td>
+          <td><span class="dots"><span class="dot filled"></span><span class="dot filled"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></td>
+          <td>
+            <span class="composite">
+              <span class="bullet">
+                <span class="cell filled"></span><span class="cell filled"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+                <span class="caret" style="left:53px;"></span>
+              </span>
+              <span class="trend up">▲+2</span>
+              <span class="signal"><i class="on"></i><i></i><i></i></span>
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. What each piece is actually answering</h2>
+    <table class="compare">
+      <thead><tr><th>Element</th><th>Question it answers</th><th>Pattern used (see research)</th></tr></thead>
+      <tbody>
+        <tr><td>Cells + caret</td><td>Where am I vs. where should I be?</td><td>Mini bullet graph (Few) — cells keep the dots' small-size robustness, caret adds the target Few's tick mark gives a full bar</td></tr>
+        <tr><td>▲/▼/▬ + delta</td><td>Is this getting better or worse?</td><td>Lichess-style arrow+delta, not a full sparkline — more legible than a line at this size</td></tr>
+        <tr><td>Signal bars</td><td>How much should I trust this number?</td><td>Signal-strength meter, monochrome so it never fights the trend's color</td></tr>
+        <tr><td>Clock badge</td><td>Is this stale?</td><td>Shown only when stale (silence = fresh) — avoids a 4th always-on element crowding the row</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+<script>
+  document.getElementById("themeSelect").addEventListener("change", function () {
+    document.documentElement.setAttribute("data-theme", this.value);
+  });
+</script>
+</body>
+</html>

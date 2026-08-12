@@ -90,6 +90,47 @@ If a signal seems to answer yes to more than one, it's usually two *separate* no
 
 ---
 
+## Proficiency scale — concrete levels per forest
+
+Each forest's proficiency (0–5) section above names *what axis* it measures (fluency / depth / consistency). This is the concrete rubric for *where on that axis* each integer sits — use it when scoring a node, human or model.
+
+### Tech Stack (fluency)
+
+| Level | Criteria |
+|---|---|
+| 0 | No evidence of use anywhere |
+| 1 | Touched it once, likely from a tutorial/example followed almost verbatim |
+| 2 | Uses core/common features, but leans on docs/reference open; sticks to straightforward, well-trodden cases |
+| 3 | Uses it unaided for typical tasks; handles common edge cases; reads docs independently to extend usage into new territory |
+| 4 | Uses advanced/non-obvious features; makes informed tradeoffs between approaches; can debug issues *in the tool itself*, not just in their own code |
+| 5 | Deep internals knowledge; extends or contributes to the tool; is the person others ask; reviews/mentors others' usage of it |
+
+### CS Fundamentals (depth)
+
+| Level | Criteria |
+|---|---|
+| 0 | No exposure to the concept |
+| 1 | Recognizes the term but couldn't apply it unprompted |
+| 2 | Applies it to a textbook-shaped case with guidance; struggles to generalize beyond that |
+| 3 | Correctly identifies when the concept applies and uses it unprompted in real code |
+| 4 | Can explain tradeoffs and *when not to* use it; compares alternatives; catches misuse of it in review |
+| 5 | Explains it from first principles; invents a novel application; mentors others through it; connects it to adjacent concepts unprompted |
+
+### Engineering Practice (consistency)
+
+| Level | Criteria |
+|---|---|
+| 0 | No evidence the pattern/habit exists at all |
+| 1 | Happens occasionally, no discernible habit — as likely absent as present |
+| 2 | Present more often than not, but drops under deadline pressure or in less-visible work |
+| 3 | Reliably present across the large majority of PRs/reviews/tickets sampled |
+| 4 | Reliably present *and* actively reinforced for others — flags its absence in review, documents it, raises it proactively |
+| 5 | Sets the team standard — others cite this person's work as the example; measurably raises the bar around them |
+
+**Why the shapes differ, not just the labels:** Tech Stack and CS Fundamentals both reward depth/independence climbing the scale, but Tech Stack's 4–5 are about *the tool's* edges (internals, contribution) while CS Fundamentals' 4–5 are about *teaching/explaining* — consistent with CS depth being judged by explanation quality, not usage frequency. Engineering Practice never rewards sophistication, only *sample size and reliability* — its 5 isn't "does something clever," it's "does the basic right thing so consistently it's become the visible standard."
+
+---
+
 ## Cross-cutting rules (apply to all three forests)
 
 - **Provenance (`confirmed` / `ai` / `gap`) means the same thing everywhere:** `confirmed` = the person has verified it (via a dot-click or explicit confirm), `ai` = inferred, awaiting review, `gap` = explicitly declared absent (either self-declared or demoted from a rejected AI guess). Don't reinterpret provenance per-forest — only the *evidence that produces it* differs per forest, per the "Evidence sources" sections above.
