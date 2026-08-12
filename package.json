@@ -1,0 +1,123 @@
+{
+  "name": "tourist",
+  "displayName": "Tourist",
+  "description": "Live AI-vs-human-vs-external line attribution for Claude Code edits.",
+  "version": "2.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "tourist.openMenu",
+        "title": "Tourist: Open Menu",
+        "icon": "$(telescope)"
+      },
+      {
+        "command": "tourist.toggleTracking",
+        "title": "Tourist: Toggle Attribution Tracking"
+      },
+      {
+        "command": "tourist.toggleMarkers",
+        "title": "Tourist: Toggle Attribution Line Markers"
+      },
+      {
+        "command": "tourist.installHook",
+        "title": "Tourist: Install Claude Code Hook"
+      },
+      {
+        "command": "tourist.verifyHook",
+        "title": "Tourist: Verify Claude Code Hook"
+      },
+      {
+        "command": "tourist.fixLineAttribution",
+        "title": "Tourist: Fix Line Attribution (Recompute Current File)"
+      },
+      {
+        "command": "tourist.openWorkspaceView",
+        "title": "Tourist: Open Workspace Attribution View"
+      },
+      {
+        "command": "tourist.pushAttributionNotes",
+        "title": "Tourist: Push Attribution Notes"
+      },
+      {
+        "command": "tourist.fetchAttributionNotes",
+        "title": "Tourist: Fetch Attribution Notes"
+      }
+    ],
+    "configuration": {
+      "title": "Tourist",
+      "properties": {
+        "tourist.attributionTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Record which lines are AI-written, human-written, or externally-written as you edit. Turn off to stop recording — existing markers are kept and frozen, and nothing new is saved."
+        },
+        "tourist.showAttributionMarkers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the colored ai/human/external line decorations in the editor. Turn off to hide them without affecting recording."
+        },
+        "tourist.attributionRetentionDays": {
+          "type": "number",
+          "default": 3,
+          "description": "How many days to keep a file's attribution markers across VS Code restarts before they age out."
+        },
+        "tourist.exclusionPolicy": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra gitignore-style glob patterns to exclude from tracking, on top of .gitignore and the built-in defaults (node_modules/, build/dist output, .git/)."
+        },
+        "tourist.shareAttribution": {
+          "type": "boolean",
+          "default": false,
+          "description": "Off by default. When on, the Push/Fetch Attribution Notes commands sync refs/notes/tourist-attribution with a remote so a team can share attribution history. When off, attribution notes stay entirely local — no network calls of any kind."
+        },
+        "tourist.gitNotesRemote": {
+          "type": "string",
+          "default": "origin",
+          "description": "The git remote name used by Push/Fetch Attribution Notes, when tourist.shareAttribution is on."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "tourist.openMenu",
+          "group": "navigation"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "tourist.workspaceAttribution",
+          "name": "Attribution",
+          "icon": "$(telescope)"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc --noEmit -p . && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
