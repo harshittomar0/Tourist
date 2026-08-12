@@ -40,6 +40,15 @@ describe("RealPersistenceAdapter (Mode A: real PersistenceManager, offset<->line
     ]);
   });
 
+  it("round-trips a mid-line range (REVIEW_SENIOR.md finding #2): save hashes an exact char substring while load verified against whole-line-boundary text, so an ordinary mid-line AI edit was silently dropped on reload", async () => {
+    const text = "const x = 42;\nconst y = 2;\n";
+    const ranges: AttributedRange[] = [{ startOffset: 10, endOffset: 12, origin: "ai", tier: "1", timestamp: 100 }];
+    await adapter.save("/repo/d.ts", "hash-unused", key, ranges, text);
+    const restored = await adapter.load("/repo/d.ts", "hash-unused", key, text);
+    expect(restored).toBeDefined();
+    expect(restored!.some((r) => r.origin === "ai" && r.startOffset <= 10 && r.endOffset >= 12)).toBe(true);
+  });
+
   it("does not persist unmarked (origin: null) ranges, and load fills the gap back in on restore", async () => {
     const text = "AAA\nBBB\n";
     const ranges: AttributedRange[] = [
