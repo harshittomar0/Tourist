@@ -57,6 +57,31 @@ export function gitNotesRemote(): string {
   return config().get<string>("gitNotesRemote", "origin");
 }
 
+export type KnowledgeMapClaudeBackend = "cli" | "api-key";
+
+/** Master opt-in gate for the Knowledge Map feature -- off by default per
+ * the same local-first posture GOAL1.md states for the rest of this
+ * extension (see ideation/knowledge-forest/PLAN.md's "Scope boundary" for
+ * why this stayed a manually-invoked spike until this setting existed). */
+export function isKnowledgeMapEnabled(): boolean {
+  return config().get<boolean>("knowledgeMap.enabled", false);
+}
+
+/** "cli" rides on the user's already-logged-in Claude Code session (no
+ * separate key to manage); "api-key" calls the Anthropic API directly and
+ * needs one, prompted for and stored in `context.secrets` on first use. */
+export function knowledgeMapClaudeBackend(): KnowledgeMapClaudeBackend {
+  return config().get<KnowledgeMapClaudeBackend>("knowledgeMap.claudeBackend", "cli");
+}
+
+export function knowledgeMapClaudeCliPath(): string {
+  return config().get<string>("knowledgeMap.claudeCliPath", "claude");
+}
+
+export function knowledgeMapModel(): string {
+  return config().get<string>("knowledgeMap.model", "claude-sonnet-5");
+}
+
 export const RELEVANT_CONFIG_KEYS = [
   "tourist.attributionTracking",
   "tourist.showAttributionMarkers",
@@ -64,6 +89,10 @@ export const RELEVANT_CONFIG_KEYS = [
   "tourist.exclusionPolicy",
   "tourist.gitNotesSync",
   "tourist.gitNotesRemote",
+  "tourist.knowledgeMap.enabled",
+  "tourist.knowledgeMap.claudeBackend",
+  "tourist.knowledgeMap.claudeCliPath",
+  "tourist.knowledgeMap.model",
 ] as const;
 
 export function affectsTouristConfig(event: vscode.ConfigurationChangeEvent): boolean {
