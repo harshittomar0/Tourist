@@ -85,6 +85,25 @@ describe("push/fetch attribution notes (explicit commands, real remote)", () => 
     expect(merged?.entries[0].attribution.tier).toBe("verified"); // local verified beats remote heuristic
   });
 
+  it("REVIEW_SENIOR.md finding #3: after a genuine concurrent-edit merge, repo B can still push -- the merge produces real ref ancestry, not a parentless commit", async () => {
+    // repo A publishes first.
+    await writeNote(defaultGitRunner, repoADir, commitSha, note(commitSha, "heuristic", 100));
+    await pushAttributionNotes(defaultGitRunner, repoADir, { enabled: true });
+
+    // repo B independently diverges *before* ever fetching repo A's note --
+    // a genuine concurrent edit of the same commit's note.
+    await writeNote(defaultGitRunner, repoBDir, commitSha, note(commitSha, "verified", 1));
+    await fetchAttributionNotes(defaultGitRunner, repoBDir, { enabled: true });
+
+    // The bug: a merged ref written via a fresh `notes add -f` shares no
+    // ancestry with the remote's history, so this push always fails
+    // non-fast-forward after a real divergence like the one above.
+    await expect(pushAttributionNotes(defaultGitRunner, repoBDir, { enabled: true })).resolves.toEqual({ skipped: false });
+
+    const onBare = git(bareDir, ["notes", "--ref=refs/notes/tourist-attribution", "show", commitSha]);
+    expect(JSON.parse(onBare).entries[0].attribution.tier).toBe("verified");
+  });
+
   it("does not leave the throwaway fetch ref behind", async () => {
     await writeNote(defaultGitRunner, repoADir, commitSha, note(commitSha, "verified", 1));
     await pushAttributionNotes(defaultGitRunner, repoADir, { enabled: true });

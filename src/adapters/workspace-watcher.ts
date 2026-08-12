@@ -64,8 +64,8 @@ export class WorkspaceWatcherAdapter {
    * underlying glob itself, since `vscode.RelativePattern` globs can't
    * express arbitrary .gitignore semantics; this is "filtered before ever
    * being *processed*", the practically-equivalent guarantee. */
-  watch(workspaceRoot: string): Disposable {
-    const predicate = createExclusionPredicate(workspaceRoot);
+  watch(workspaceRoot: string, extraExcludePatterns: readonly string[] = []): Disposable {
+    const predicate = createExclusionPredicate(workspaceRoot, extraExcludePatterns);
     this.predicates.set(workspaceRoot, predicate);
 
     const watcher = (this.deps.createWatcher ?? createVscodeRawWatcher)(workspaceRoot);

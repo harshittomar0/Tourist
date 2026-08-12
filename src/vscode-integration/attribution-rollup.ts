@@ -14,7 +14,8 @@
  * (lazy snapshot seeding means that's expected, not a bug -- see the
  * `listPersisted` doc comment in contracts.ts).
  */
-import type { EngineLike, ExclusionPredicate, PersistenceLike, RepoBranchKey } from "./contracts.ts";
+import type { AttributedRange, EngineLike, ExclusionPredicate, PersistenceLike, RepoBranchKey } from "./contracts.ts";
+import { computeLineBuckets, type OffsetToLine } from "./line-buckets.ts";
 import { addStats, computeStats, EMPTY_STATS, type AttributionStats } from "./stats.ts";
 
 export interface FileRollup {
@@ -43,10 +44,43 @@ export interface CollectRollupOptions {
    * predicate"). Optional here only because the mock build has no real
    * predicate to inject yet; omitting it is not a valid end state. */
   isTracked?: ExclusionPredicate["isTracked"];
+  /**
+   * Resolves a live-engine docId to something that can convert its
+   * character offsets into line numbers (real usage: the open
+   * `vscode.TextDocument`, if any). `persistence.listPersisted()`'s
+   * `AttributedRange`s are already 1-unit-per-line pseudo-offsets (see that
+   * method's own doc comment in persistence-adapter.ts); `engine.getRanges()`'s
+   * are real character offsets. Without converting the live side to the same
+   * line-unit before summing, `addStats` mixes two different units into one
+   * "total" -- a workspace with any open file gets a percentage dominated by
+   * that file's raw character count, arithmetically meaningless next to a
+   * closed file's line count (REVIEW_SENIOR.md finding #5). Optional, and
+   * character-based `computeStats` remains the fallback for a live docId this
+   * resolves to `undefined` for (e.g. a file the whole-file-diff watcher has
+   * touched this session but that has never had an open document, so there is
+   * no `vscode.TextDocument` to convert offsets with) -- a real, smaller
+   * residual gap, not silently pretended away.
+   */
+  getDocument?: (docId: string) => OffsetToLine | undefined;
+}
+
+/** Character-offset ranges -> the same 1-unit-per-line counting
+ * `persistence.listPersisted()`'s pseudo-offsets already use, via
+ * `computeLineBuckets`. Falls back to raw `computeStats` when no document is
+ * available to convert offsets with. */
+function statsFor(ranges: readonly AttributedRange[], doc: OffsetToLine | undefined) {
+  if (!doc) return computeStats(ranges);
+  const buckets = computeLineBuckets(doc, ranges);
+  return {
+    ai: buckets.ai.size,
+    human: buckets.human.size,
+    external: buckets.external.size,
+    total: buckets.ai.size + buckets.human.size + buckets.external.size,
+  };
 }
 
 export async function collectWorkspaceRollup(options: CollectRollupOptions): Promise<WorkspaceRollup> {
-  const { engine, persistence, folders, isTracked } = options;
+  const { engine, persistence, folders, isTracked, getDocument } = options;
   const files: FileRollup[] = [];
   const seen = new Set<string>();
 
@@ -56,7 +90,7 @@ export async function collectWorkspaceRollup(options: CollectRollupOptions): Pro
       if (isTracked && !isTracked(docId)) continue;
       if (seen.has(docId)) continue;
       seen.add(docId);
-      files.push({ docId, stats: computeStats(engine.getRanges(docId)) });
+      files.push({ docId, stats: statsFor(engine.getRanges(docId), getDocument?.(docId)) });
     }
 
     const persisted = await persistence.listPersisted(folder.key);
@@ -65,6 +99,7 @@ export async function collectWorkspaceRollup(options: CollectRollupOptions): Pro
       if (isTracked && !isTracked(entry.docId)) continue;
       if (seen.has(entry.docId)) continue; // live engine state already wins
       seen.add(entry.docId);
+      // Already 1-unit-per-line -- no conversion needed.
       files.push({ docId: entry.docId, stats: computeStats(entry.ranges) });
     }
   }

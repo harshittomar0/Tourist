@@ -47,13 +47,7 @@ function matchesWorkspace(workspaceRoot: string, workspaceFolders: string[] | un
 }
 
 /**
- * Phase 0 experiment 2 (spike/FINDINGS.md) confirmed a stale lock file
- * (dead pid) is NOT auto-removed -- existence alone is not a liveness
- * signal -- so the `pidLivenessCheck` below is confirmed necessary, not
- * merely speculative, and no additional staleness TTL is needed beyond it.
- * NOTE: `pidLivenessCheck` still defaults to *off* below; flipping the
- * default is a one-line change but is left as-is here since this pass is
- * comment cleanup only, not a behavior change.
+ * Corroborates lock-file existence with workspace containment (`workspaceFolders`) and a `pid`-liveness check via `process.kill(pid, 0)` (which throws ESRCH if the pid is dead, on the same machine). Defaults to *on* (`pidLivenessCheck: true`) because spike/FINDINGS.md Experiment 2 confirmed a stale lock left by a killed session is never auto-removed and would otherwise permanently corroborate Tier 2a (REVIEW_SENIOR.md finding #4).
  */
 export interface LockFileWatcherOptions {
   pidLivenessCheck?: boolean;
@@ -119,7 +113,7 @@ export class NodeLockFileWatcherAdapter implements LockFileWatcherAdapter {
     for (const entry of entries) {
       const contents = readLockFile(path.join(dir, entry));
       if (!contents) continue;
-      if (this.options.pidLivenessCheck && contents.pid !== undefined && !isPidAlive(contents.pid)) continue;
+      if ((this.options.pidLivenessCheck ?? true) && contents.pid !== undefined && !isPidAlive(contents.pid)) continue;
       for (const root of this.workspaceRoots) {
         if (matchesWorkspace(root, contents.workspaceFolders)) matchedRoots.add(root);
       }

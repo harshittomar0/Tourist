@@ -22,6 +22,42 @@ function runHook(payload: unknown, configDir: string): void {
   assert.equal(result.status, 0, result.stderr);
 }
 
+describe("FileHookLogReaderAdapter.install()/isInstalled() -- the single canonical hook-install implementation (REVIEW_JRDEV.md finding #4: hook-install.ts now delegates here instead of duplicating this logic)", () => {
+  test("install() writes settings.json inside CLAUDE_CONFIG_DIR, referencing the real attribution-hook.mjs filename, and isInstalled() then reports true", async () => {
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "tourist-hook-install-"));
+    const originalConfigDir = process.env.CLAUDE_CONFIG_DIR;
+    try {
+      process.env.CLAUDE_CONFIG_DIR = configDir;
+      const reader = new FileHookLogReaderAdapter(HOOK_SCRIPT);
+
+      const before = await reader.isInstalled();
+      assert.equal(before, false);
+
+      const { alreadyInstalled } = await reader.install();
+      assert.equal(alreadyInstalled, false);
+
+      const settingsPath = path.join(configDir, "settings.json");
+      assert.equal(fs.existsSync(settingsPath), true, "settings.json must land inside the CLAUDE_CONFIG_DIR override, not the real home directory");
+      const written = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+      const command = `node ${JSON.stringify(HOOK_SCRIPT)}`;
+      assert.ok(written.hooks.PreToolUse.some((e: { hooks: { command: string }[] }) => e.hooks.some((h) => h.command === command)));
+      assert.ok(written.hooks.PostToolUse.some((e: { hooks: { command: string }[] }) => e.hooks.some((h) => h.command === command)));
+      assert.match(command, /attribution-hook\.mjs/);
+
+      const after = await reader.isInstalled();
+      assert.equal(after, true);
+
+      const second = await reader.install();
+      assert.equal(second.alreadyInstalled, true, "install() must be idempotent");
+      reader.dispose();
+    } finally {
+      if (originalConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = originalConfigDir;
+      fs.rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("FileHookLogReaderAdapter + attribution-hook.mjs with CLAUDE_CONFIG_DIR override", () => {
   test("attribution log lands inside the override dir, not as its sibling", () => {
     const scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tourist-hook-config-dir-"));

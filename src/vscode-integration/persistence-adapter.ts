@@ -114,7 +114,14 @@ function toPersistenceRange(docId: string, currentText: string, offsets: readonl
   if (range.origin === null || range.endOffset <= range.startOffset) return undefined;
   const startLine = offsetToLine(offsets, range.startOffset);
   const endLine = offsetToLine(offsets, Math.max(range.startOffset, range.endOffset - 1));
-  const text = currentText.slice(range.startOffset, range.endOffset);
+  // Hash the same whole-line-boundary text `fromPersistedEntry` reconstructs
+  // on load (offsets[startLine] .. offsets[endLine + 1]), not the range's
+  // exact character substring -- the persisted `range` is line-grained
+  // (RangeSpan has no column), so hashing a narrower character-precise
+  // substring here would never match what load recomputes from line
+  // boundaries alone, silently dropping any range that doesn't happen to
+  // span whole lines (REVIEW_SENIOR.md finding #2).
+  const text = currentText.slice(offsets[startLine], offsets[endLine + 1] ?? currentText.length);
   const now = range.timestamp;
   return {
     id: randomUUID(),

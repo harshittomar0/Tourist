@@ -42,6 +42,15 @@ describe("createExclusionPredicate", () => {
     });
   });
 
+  test("REVIEW_JRDEV.md finding #3: extra patterns from tourist.exclusionPolicy are honored on top of the defaults", () => {
+    withWorkspace(null, (root) => {
+      const predicate = createExclusionPredicate(root, ["*.secret", "generated/"]);
+      assert.equal(predicate.isTracked(path.join(root, "creds.secret")), false);
+      assert.equal(predicate.isTracked(path.join(root, "generated", "out.js")), false);
+      assert.equal(predicate.isTracked(path.join(root, "src", "index.ts")), true);
+    });
+  });
+
   test("negation patterns (re-including a subpath) are honored, since `ignore` implements full gitignore semantics", () => {
     // Deliberately uses a directory name ("vendor/") that does not collide
     // with DEFAULT_EXCLUDES -- git's own semantics (faithfully replicated by

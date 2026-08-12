@@ -20,9 +20,19 @@
  *     no real commit-time trigger yet).
  * ==========================================================================
  */
+import { readFile as fsReadFile } from "node:fs/promises";
+import * as path from "node:path";
 import * as vscode from "vscode";
+import {
+  FileHookLogReaderAdapter,
+  NodeLockFileWatcherAdapter,
+  PsListProcessScanFallbackAdapter,
+  VscodeShellIntegrationBridgeAdapter,
+  WorkspaceWatcherAdapter,
+} from "./adapters/index.ts";
 import { AttributionEngine } from "./core/engine.ts";
 import { CorroborationStore } from "./core/corroboration-store.ts";
+import type { VscodeGitAPI, VscodeGitRepository } from "./persistence/vscodeGitTypes.ts";
 import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
 import type { AttributedRange, EngineLike, PersistenceLike, RepoBranchKey } from "./vscode-integration/contracts.ts";
@@ -33,19 +43,133 @@ import { StatusBarController } from "./vscode-integration/status-bar.ts";
 import { WorkspaceAttributionProvider } from "./vscode-integration/workspace-view.ts";
 
 const SAVE_DEBOUNCE_MS = 2000;
+/** How long a git-op-suppression window stays open after the last observed
+ * git-repository state change -- ported from tourist-raw's own
+ * GIT_ACTIVITY_SUPPRESS_MS pattern (watch for activity, suppress for a short
+ * window after the most recent event, not just the instant of the event). */
+const GIT_ACTIVITY_SUPPRESS_MS = 1500;
+
+/** Longest-prefix match of `absolutePath` against the currently open
+ * workspace folders -- the workspace identity every corroboration adapter
+ * (lock-file/shell-integration/process-scan) keys its signals by, and so the
+ * identity `resolveWorkspaceId`/git-op suppression must key by too, for the
+ * corroboration-store lookup in tier-classification to ever actually hit. */
+function workspaceRootForPath(absolutePath: string): string | undefined {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  let best: string | undefined;
+  for (const folder of folders) {
+    const root = folder.uri.fsPath;
+    if (absolutePath === root || absolutePath.startsWith(root + path.sep)) {
+      if (!best || root.length > best.length) best = root;
+    }
+  }
+  return best;
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   let folderScopesSyncSnapshot: { path: string; key: RepoBranchKey }[] = [];
 
-  const engine: EngineLike = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+  const corroborationStore = new CorroborationStore();
+  const hookScriptPath = path.join(context.extensionPath, "hooks", "attribution-hook.mjs");
+  const hookLogReader = new FileHookLogReaderAdapter(hookScriptPath);
+  const realEngine = new AttributionEngine({
+    corroborationStore,
+    hookLogReader,
+    resolveWorkspaceId: (docId) => workspaceRootForPath(docId) ?? docId,
+  });
+  const engine: EngineLike = realEngine;
+
   const gitExtension = vscode.extensions.getExtension("vscode.git");
+  const gitApi: VscodeGitAPI | undefined = gitExtension?.exports?.getAPI?.(1);
   const persistence: PersistenceLike = new RealPersistenceAdapter({
     baseDir: vscode.Uri.joinPath(context.globalStorageUri, "attribution").fsPath,
     retentionDays: settings.attributionRetentionDays(),
-    vscodeGitApi: gitExtension?.exports?.getAPI?.(1),
+    vscodeGitApi: gitApi,
     gitNotesConfig: () => ({ enabled: settings.isGitNotesSyncEnabled(), remote: settings.gitNotesRemote() }),
     getRepoRoots: () => [...new Set(folderScopesSyncSnapshot.map((f) => f.key.repoRoot))],
   });
+
+  // ---- Tier 2a/2b/2c corroboration adapters ---------------------------
+  // Each adapter emits `(workspaceRoot, signal)` into the shared
+  // corroboration store; tier-classification (src/core/tier-classifier.ts)
+  // reads that store keyed by `workspaceRootForPath`'s same identity.
+  const lockFileWatcher = new NodeLockFileWatcherAdapter();
+  const shellIntegrationBridge = new VscodeShellIntegrationBridgeAdapter();
+  const processScanFallback = new PsListProcessScanFallbackAdapter();
+  for (const adapter of [lockFileWatcher, shellIntegrationBridge, processScanFallback]) {
+    adapter.onDidChangeSignal((workspaceRoot, signal) => corroborationStore.setSignal(workspaceRoot, signal));
+  }
+  // Started once, with the workspace folders open at activation time -- a
+  // folder added later via onDidChangeWorkspaceFolders won't gain Tier
+  // 2a/2b/2c coverage without a window reload. Restarting these on every
+  // folder change would require each adapter to support being re-started
+  // without leaking its previous fs.watch/setInterval handle, which none of
+  // them do today; fixing that is a follow-up, not required to make the
+  // core feature work end-to-end.
+  const initialWorkspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+  lockFileWatcher.start(initialWorkspaceRoots);
+  shellIntegrationBridge.start(initialWorkspaceRoots);
+  processScanFallback.start(initialWorkspaceRoots);
+
+  // ---- Whole-file-diff ingestion for tracked-but-closed files ----------
+  const workspaceWatcherAdapter = new WorkspaceWatcherAdapter(realEngine, {
+    readFile: async (absolutePath) => {
+      try {
+        return await fsReadFile(absolutePath, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    isDocumentOpen: (absolutePath) =>
+      vscode.workspace.textDocuments.some((d) => d.uri.scheme === "file" && d.uri.fsPath === absolutePath),
+  });
+  const workspaceWatcherDisposables = new Map<string, { dispose(): void }>();
+  function startWatchingFolder(folder: vscode.WorkspaceFolder): void {
+    const root = folder.uri.fsPath;
+    if (workspaceWatcherDisposables.has(root)) return;
+    workspaceWatcherDisposables.set(root, workspaceWatcherAdapter.watch(root, settings.exclusionPolicyOverride()));
+  }
+  function stopWatchingFolder(root: string): void {
+    workspaceWatcherDisposables.get(root)?.dispose();
+    workspaceWatcherDisposables.delete(root);
+  }
+  for (const folder of vscode.workspace.workspaceFolders ?? []) startWatchingFolder(folder);
+
+  // ---- Git-op suppression ----------------------------------------------
+  // Ported from tourist-raw's git-guard-and-reconcile pattern: any observed
+  // git-repository state change (checkout/rebase/stash/merge/commit, etc.,
+  // via the real vscode.git extension's Repository.state.onDidChange) opens
+  // a short suppression window per affected workspace folder, so a disk
+  // write the operation causes lands as unmarked (null) instead of being
+  // misattributed "ai"/"external".
+  const gitSuppressTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  function markGitActivity(workspaceRoot: string): void {
+    realEngine.setGitOpSuppression(workspaceRoot, true);
+    const existing = gitSuppressTimers.get(workspaceRoot);
+    if (existing) clearTimeout(existing);
+    gitSuppressTimers.set(
+      workspaceRoot,
+      setTimeout(() => {
+        gitSuppressTimers.delete(workspaceRoot);
+        realEngine.setGitOpSuppression(workspaceRoot, false);
+      }, GIT_ACTIVITY_SUPPRESS_MS)
+    );
+  }
+  function suppressForRepo(repo: VscodeGitRepository): void {
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const root = folder.uri.fsPath;
+      if (root === repo.rootUri.fsPath || root.startsWith(repo.rootUri.fsPath + path.sep)) {
+        markGitActivity(root);
+      }
+    }
+  }
+  if (gitApi) {
+    const attachRepo = (repo: VscodeGitRepository): void => {
+      context.subscriptions.push(repo.state.onDidChange(() => suppressForRepo(repo)));
+    };
+    for (const repo of gitApi.repositories) attachRepo(repo);
+    context.subscriptions.push(gitApi.onDidOpenRepository(attachRepo));
+  }
 
   const dirtyTracker = new DirtyTracker();
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -64,9 +188,17 @@ export function activate(context: vscode.ExtensionContext): void {
     return Promise.all(folders.map(async (f) => ({ path: f.uri.fsPath, key: await keyFor(f) })));
   }
 
+  // Converts a live docId's character-offset ranges into line units for the
+  // rollup, when that docId has a real open document to convert offsets
+  // with (REVIEW_SENIOR.md finding #5 -- see attribution-rollup.ts's
+  // `getDocument` doc comment for why this matters).
+  const getOpenDocument = (docId: string): vscode.TextDocument | undefined =>
+    vscode.workspace.textDocuments.find((d) => d.uri.scheme === "file" && d.uri.fsPath === docId);
+
   const workspaceView = new WorkspaceAttributionProvider(() => ({
     engine,
     persistence,
+    getDocument: getOpenDocument,
     // ---- SWAP POINT: pass Agent A's real ExclusionPredicate.isTracked
     // here once it exists, per contract §1c -- the UI must reuse it rather
     // than reimplement exclusion logic. This closure reads a cached
@@ -76,7 +208,12 @@ export function activate(context: vscode.ExtensionContext): void {
     folders: folderScopesSyncSnapshot,
   }));
 
-  const statusBar = new StatusBarController(() => ({ engine, persistence, folders: folderScopesSyncSnapshot }));
+  const statusBar = new StatusBarController(() => ({
+    engine,
+    persistence,
+    getDocument: getOpenDocument,
+    folders: folderScopesSyncSnapshot,
+  }));
   context.subscriptions.push(statusBar);
 
   const treeView = vscode.window.createTreeView("tourist.workspaceAttribution", { treeDataProvider: workspaceView });
@@ -213,7 +350,11 @@ export function activate(context: vscode.ExtensionContext): void {
       for (const editor of editors) refreshEditorDecorations(editor);
     }),
 
-    vscode.workspace.onDidChangeWorkspaceFolders(() => void refreshWorkspaceState()),
+    vscode.workspace.onDidChangeWorkspaceFolders((event) => {
+      for (const folder of event.added) startWatchingFolder(folder);
+      for (const folder of event.removed) stopWatchingFolder(folder.uri.fsPath);
+      void refreshWorkspaceState();
+    }),
 
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!settings.affectsTouristConfig(event)) return;
@@ -222,14 +363,27 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     // Flush any pending debounced saves so nothing's lost when the window closes.
-    new vscode.Disposable(() => flushPendingSaves())
+    new vscode.Disposable(() => flushPendingSaves()),
+
+    hookLogReader,
+    lockFileWatcher,
+    shellIntegrationBridge,
+    processScanFallback,
+    new vscode.Disposable(() => {
+      for (const timer of gitSuppressTimers.values()) clearTimeout(timer);
+      gitSuppressTimers.clear();
+      for (const disposable of workspaceWatcherDisposables.values()) disposable.dispose();
+      workspaceWatcherDisposables.clear();
+      workspaceWatcherAdapter.dispose();
+    })
   );
 
   registerCommands(context, {
-    extensionPath: context.extensionPath,
     engine,
     persistence,
     workspaceView,
+    hookInstaller: hookLogReader,
+    hookScriptPath,
     refreshVisibleDecorations,
     refreshStatusBar: () => statusBar.refresh(),
   });
