@@ -63,4 +63,14 @@ export interface DeepDiveMessage {
   topics: string[];
 }
 
-export type WebviewToExtensionMessage = NodeOverrideMessage | DeepDiveMessage;
+/** Sent whenever the user changes the theme dropdown, so the extension host
+ * can carry the choice forward into the next `buildKnowledgeMapHtml` call --
+ * see html.ts's injected bridge script. Without this, panel.ts's `render()`
+ * would silently reset the theme to the raw file's hardcoded default on
+ * every subsequent nodeOverride/deepDive round trip. */
+export interface ThemeChangedMessage {
+  type: "themeChanged";
+  theme: string;
+}
+
+export type WebviewToExtensionMessage = NodeOverrideMessage | DeepDiveMessage | ThemeChangedMessage;

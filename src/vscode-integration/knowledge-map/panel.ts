@@ -26,6 +26,11 @@ export interface KnowledgeMapPanelDeps {
 
 let currentPanel: vscode.WebviewPanel | undefined;
 let messageListener: vscode.Disposable | undefined;
+/** Last theme reported by the webview's themeSelect (see html.ts's bridge
+ * script) -- threaded into every subsequent `render()` call so re-rendering
+ * the panel after a nodeOverride/deepDive round trip doesn't silently reset
+ * the user's live theme choice back to the raw file's hardcoded default. */
+let currentTheme: string | undefined;
 
 export async function showKnowledgeMapPanel(context: vscode.ExtensionContext, deps: KnowledgeMapPanelDeps): Promise<void> {
   const paths = resolveAnalyserPaths(context.extensionPath);
@@ -62,6 +67,11 @@ export async function showKnowledgeMapPanel(context: vscode.ExtensionContext, de
   messageListener = currentPanel.webview.onDidReceiveMessage(async (message: WebviewToExtensionMessage) => {
     if (!currentPanel) return;
 
+    if (message?.type === "themeChanged") {
+      currentTheme = message.theme;
+      return;
+    }
+
     if (message?.type === "nodeOverride") {
       const forest = loadForest(paths.forestJsonPath);
       const result = applyOverride(forest, message, merge);
@@ -83,7 +93,7 @@ export async function showKnowledgeMapPanel(context: vscode.ExtensionContext, de
 function render(panel: vscode.WebviewPanel, htmlPath: string, forestJsonPath: string): void {
   const rawHtml = fs.readFileSync(htmlPath, "utf8");
   const forest = loadForest(forestJsonPath);
-  panel.webview.html = buildKnowledgeMapHtml(rawHtml, forest, panel.webview.cspSource);
+  panel.webview.html = buildKnowledgeMapHtml(rawHtml, forest, panel.webview.cspSource, currentTheme);
 }
 
 /** Test-only seam: the module-level singleton means tests can't otherwise
@@ -91,4 +101,5 @@ function render(panel: vscode.WebviewPanel, htmlPath: string, forestJsonPath: st
 export function _resetForTests(): void {
   currentPanel = undefined;
   messageListener = undefined;
+  currentTheme = undefined;
 }

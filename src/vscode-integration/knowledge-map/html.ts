@@ -78,6 +78,22 @@ export function injectRealForestData(html: string, forest: ForestFile): string {
   return out;
 }
 
+/**
+ * ui/knowledge-forest.html's `<html>` tag hardcodes `data-theme="light"` as
+ * its initial value -- fine for a standalone page load, but panel.ts's
+ * `render()` calls `buildKnowledgeMapHtml` again (from that same on-disk
+ * raw file) after every node-override/deep-dive round trip, replacing
+ * `panel.webview.html` wholesale. Without this, each of those re-renders
+ * silently drops whatever theme the user had live-selected back to the
+ * file's hardcoded default. Only touches the first `<html ...>` tag's
+ * `data-theme` attribute, so it's independent of the other anchor-based
+ * transforms above.
+ */
+export function injectTheme(html: string, theme: string | undefined): string {
+  if (!theme) return html;
+  return html.replace(/<html([^>]*)\bdata-theme="[^"]*"/, `<html$1data-theme="${theme}"`);
+}
+
 export function injectContentSecurityPolicy(html: string, nonce: string, cspSource: string): string {
   const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">`;
   const withMeta = html.includes("</head>") ? html.replace("</head>", `${meta}\n</head>`) : meta + html;
@@ -277,6 +293,22 @@ const OVERRIDE_BRIDGE_SOURCE = `
   deepDiveBar.appendChild(deepDiveBtn);
   document.body.appendChild(deepDiveBar);
   updateDeepDiveBar();
+
+  // ---- Theme persistence --------------------------------------------------
+  // The original script's own themeSelect listener (registered before this
+  // bridge script runs, so it always fires first -- see this module's
+  // header comment on registration order) only updates the live DOM. It
+  // has no way to reach the extension host, so a theme choice would
+  // otherwise be silently lost the next time panel.ts calls
+  // buildKnowledgeMapHtml and replaces the whole document (after any
+  // nodeOverride or deepDive round trip). Report every change so the
+  // extension host can carry it forward into the next render.
+  var themeSelectEl = document.getElementById("themeSelect");
+  if (themeSelectEl) {
+    themeSelectEl.addEventListener("change", function () {
+      post({ type: "themeChanged", theme: themeSelectEl.value });
+    });
+  }
 })();
 `;
 
@@ -285,9 +317,10 @@ export function injectOverrideBridge(html: string, nonce: string): string {
   return html.includes("</body>") ? html.replace("</body>", `${bridge}\n</body>`) : html + bridge;
 }
 
-export function buildKnowledgeMapHtml(rawHtml: string, forest: ForestFile, cspSource: string): string {
+export function buildKnowledgeMapHtml(rawHtml: string, forest: ForestFile, cspSource: string, theme?: string): string {
   const nonce = makeNonce();
   let html = injectRealForestData(rawHtml, forest);
+  html = injectTheme(html, theme);
   html = injectContentSecurityPolicy(html, nonce, cspSource);
   html = injectOverrideBridge(html, nonce);
   return html;
