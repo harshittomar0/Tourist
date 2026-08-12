@@ -32,24 +32,42 @@ analyser/                 The ingestion pipeline. Self-contained TypeScript pack
 cd analyser
 npm install
 
-# Inspect what would be sent to Claude, without spending an API call:
+# Inspect what would be sent to Claude, without spending an API call or
+# invoking any Claude backend:
 npx tsx src/cli.ts --repo /path/to/some/repo --dry-run --out ../data/forest.json
 
-# The real run (requires your own key — never runs implicitly):
-export ANTHROPIC_API_KEY=sk-...
+# The real run — default backend is "cli": it shells out to the already-
+# authenticated `claude` CLI (whatever you're logged in with), no separate
+# API key needed:
 npx tsx src/cli.ts --repo /path/to/some/repo --out ../data/forest.json
 
+# Or call the Anthropic API directly with your own key instead (never runs
+# implicitly — see PLAN.md "Privacy boundary"):
+export ANTHROPIC_API_KEY=sk-...
+npx tsx src/cli.ts --repo /path/to/some/repo --out ../data/forest.json --claude-backend api-key
+
 # Flags:
-#   --since "30 days ago"     git log window (default: 30 days ago)
-#   --max-commits 20          cap on commits considered (default: 20)
-#   --forest tech,cs,practice which forests to classify into (default: all three)
-#   --include-prompts         also read Claude Code session transcripts for this repo —
+#   --since "30 days ago"      git log window (default: 30 days ago)
+#   --max-commits 20           cap on commits considered (default: 20)
+#   --forest tech,cs,practice  which forests to classify into (default: all three)
+#   --include-prompts          also read Claude Code session transcripts for this repo —
 #                              opt-in, off by default (see PLAN.md, privacy-sensitive)
-#   --max-chars 60000         evidence-bundle size cap sent to Claude
+#   --max-chars 60000          evidence-bundle size cap sent to Claude
+#   --model claude-sonnet-5    model id, passed to whichever backend is active
+#   --claude-backend cli       "cli" (default, shells out to the `claude` CLI) or
+#                              "api-key" (calls the Anthropic API directly)
+#   --claude-cli-path claude   path to the `claude` binary — only used when
+#                              --claude-backend is "cli"
+#   --deep-dive "Django,Big-O" comma-separated existing category labels (or
+#                              "Parent > Child" paths to disambiguate a
+#                              repeated label) to expand in much more detail
+#                              this run, instead of the normal shallow pass.
+#                              A label that isn't found in the current forest
+#                              is skipped and reported on stderr, not an error.
 ```
 
 ```bash
-npm test        # 27 tests, no network/API needed
+npm test        # 65 tests, no network/API needed
 npx tsc --noEmit -p .   # strict type-check
 ```
 

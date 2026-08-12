@@ -8,9 +8,10 @@ import { loadAttributionLog, partitionLinesByAuthor, attributionLogPath } from "
 import { getFileContentAtCommit } from "./sources/gitSource.js";
 import { listTranscriptFiles, readTranscript } from "./sources/promptSource.js";
 import { buildSystemPrompt, buildUserContent, truncateEvidence, type EvidenceItem } from "./claude/buildPrompt.js";
-import { createClaudeCaller } from "./claude/client.js";
+import { createClaudeCaller, DEFAULT_CLI_PATH, DEFAULT_MODEL, type ClaudeBackend } from "./claude/client.js";
 import { parseForestResponse } from "./forest/validate.js";
 import { mergeForest } from "./forest/merge.js";
+import { resolveDeepDiveTopics } from "./forest/deepDive.js";
 import type { ForestFile, ForestKind } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,11 @@ interface CliOptions {
   dryRun: boolean;
   maxCommits: number;
   maxChars: number;
+  model: string;
+  claudeBackend: ClaudeBackend;
+  claudeCliPath: string;
+  /** Raw --deep-dive entries (comma-separated labels/paths), not yet resolved against the existing forest. */
+  deepDiveLabels: string[];
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -35,7 +41,11 @@ function parseArgs(argv: string[]): CliOptions {
     includePrompts: false,
     dryRun: false,
     maxCommits: 20,
-    maxChars: 60_000
+    maxChars: 60_000,
+    model: DEFAULT_MODEL,
+    claudeBackend: "cli",
+    claudeCliPath: DEFAULT_CLI_PATH,
+    deepDiveLabels: []
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -64,6 +74,27 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "--max-chars":
         opts.maxChars = Number(next());
+        break;
+      case "--model":
+        opts.model = next();
+        break;
+      case "--claude-backend": {
+        const value = next();
+        if (value !== "cli" && value !== "api-key") {
+          console.error(`Invalid --claude-backend: "${value}" (expected "cli" or "api-key")`);
+          process.exit(1);
+        }
+        opts.claudeBackend = value;
+        break;
+      }
+      case "--claude-cli-path":
+        opts.claudeCliPath = next();
+        break;
+      case "--deep-dive":
+        opts.deepDiveLabels = next()
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
         break;
       default:
         console.error(`Unknown argument: ${arg}`);
@@ -148,8 +179,25 @@ async function main(): Promise<void> {
   console.error(`Repo: ${repo}`);
   console.error(`Attribution log: ${attributionLogPath()}`);
   console.error(`Since: ${opts.since} | max commits: ${opts.maxCommits} | forests: ${opts.forests.join(",")}`);
+  console.error(
+    `Claude backend: ${opts.claudeBackend}${opts.claudeBackend === "cli" ? ` (${opts.claudeCliPath})` : ""} | model: ${opts.model}`
+  );
 
   const existing = loadExistingForest(opts.out);
+
+  const deepDive = resolveDeepDiveTopics(opts.deepDiveLabels, existing);
+  if (opts.deepDiveLabels.length > 0) {
+    if (deepDive.resolved.length > 0) {
+      console.error(
+        `Deep dive requested for: ${deepDive.resolved.map((t) => `[${t.forestKind}] ${t.path.join(" > ")}`).join(", ")}`
+      );
+    }
+    if (deepDive.notFound.length > 0) {
+      console.error(
+        `Deep dive: label(s) not found in the existing forest, skipped: ${deepDive.notFound.join(", ")}`
+      );
+    }
+  }
 
   let evidence = gatherGitEvidence(repo, opts.since, opts.maxCommits);
   if (opts.includePrompts) {
@@ -160,8 +208,8 @@ async function main(): Promise<void> {
 
   const guidelinesPath = path.join(__dirname, "..", "..", "taxonomy-guidelines.md");
   const guidelines = fs.readFileSync(guidelinesPath, "utf8");
-  const systemPrompt = buildSystemPrompt(guidelines);
-  const userContent = buildUserContent(opts.forests, evidence);
+  const systemPrompt = buildSystemPrompt(guidelines, deepDive.resolved);
+  const userContent = buildUserContent(opts.forests, evidence, existing);
 
   if (opts.dryRun) {
     const promptOut = path.join(path.dirname(opts.out), "dry-run-prompt.txt");
@@ -171,7 +219,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const callClaude = createClaudeCaller();
+  const callClaude = createClaudeCaller({
+    backend: opts.claudeBackend,
+    model: opts.model,
+    cliPath: opts.claudeCliPath
+  });
   const raw = await callClaude(systemPrompt, userContent);
   const incoming = parseForestResponse(raw);
   const merged = mergeForest(existing, incoming);
