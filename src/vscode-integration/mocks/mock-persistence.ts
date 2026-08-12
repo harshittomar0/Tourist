@@ -72,13 +72,17 @@ export class MockPersistence implements PersistenceLike {
     return [key.repoRoot, key.branch, ""].join(KEY_PARTS_SEPARATOR);
   }
 
-  async load(docId: string, contentHash: string, key: RepoBranchKey): Promise<AttributedRange[] | undefined> {
+  // `currentText` is part of the real PersistenceLike signature (needed by
+  // RealPersistenceAdapter's per-range validation/offset<->line conversion)
+  // but this mock's whole-file-hash gate never needed it -- accepted and
+  // ignored so the mock keeps satisfying the interface unchanged.
+  async load(docId: string, contentHash: string, key: RepoBranchKey, _currentText?: string): Promise<AttributedRange[] | undefined> {
     const entry = this.store.get(this.storeKey(docId, key));
     if (!entry || entry.contentHash !== contentHash) return undefined;
     return entry.ranges.slice();
   }
 
-  async save(docId: string, contentHash: string, key: RepoBranchKey, ranges: AttributedRange[]): Promise<void> {
+  async save(docId: string, contentHash: string, key: RepoBranchKey, ranges: AttributedRange[], _currentText?: string): Promise<void> {
     this.store.set(this.storeKey(docId, key), { contentHash, ranges: ranges.slice() });
   }
 
@@ -86,7 +90,7 @@ export class MockPersistence implements PersistenceLike {
     return this.resolveKeyImpl(uri);
   }
 
-  async rename(oldDocId: string, newDocId: string): Promise<void> {
+  async rename(oldDocId: string, newDocId: string, _key?: RepoBranchKey): Promise<void> {
     const suffix = KEY_PARTS_SEPARATOR + oldDocId;
     for (const [storedKey, entry] of [...this.store.entries()]) {
       if (!storedKey.endsWith(suffix)) continue;

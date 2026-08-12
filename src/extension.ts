@@ -2,33 +2,32 @@
  * Activation entry point (Agent C's sole integration point, per PLAN1.md
  * Part 2: "the 'seam' is a file, not a shared editing surface"). Wires the
  * document-change listener, decorations, status bar, workspace view,
- * commands, and settings in `src/vscode-integration/` to an engine and a
- * persistence module.
+ * commands, and settings in `src/vscode-integration/` to a real engine
+ * (Agent A's `AttributionEngine`) and a real persistence adapter (wrapping
+ * Agent B's `src/persistence/`).
  *
- * ============================ MOCK-TO-REAL SWAP =========================
- * Both dependencies below are currently the hand-written mocks from
- * `src/vscode-integration/mocks/`, per the brief: Agent C builds and
- * validates against these first, independent of Agents A/B's real modules.
+ * ============================ MOCK-TO-REAL SWAP, DONE ====================
  * Every consumer in this file talks to the `EngineLike`/`PersistenceLike`
- * *interfaces* (contracts.ts), never to `MockAttributionEngine`/
- * `MockPersistence` concretely except right here at construction -- so the
- * swap at Sync point 1/2 is meant to be exactly these two constructor
- * calls, once:
- *   - Agent A's real engine additionally implements `listTrackedDocIds`
- *     (flagged gap, see contracts.ts)
- *   - Agent B's real persistence module additionally implements
- *     `listPersisted` (flagged gap, see contracts.ts)
- * Everything else in this file is written against the interface today
- * specifically so that becomes true.
+ * *interfaces* (contracts.ts), never to a concrete implementation except
+ * right here at construction. Both real implementations are now wired:
+ *   - `AttributionEngine` (src/core/engine.ts) -- confirmed to implement
+ *     `listTrackedDocIds` and (added during this consolidation pass)
+ *     `renameDocument`.
+ *   - `RealPersistenceAdapter` (persistence-adapter.ts) -- wraps Agent B's
+ *     `PersistenceManager` + `src/persistence/gitNotes/*`; see that file's
+ *     header comment for the real AttributedRange-shape mismatch it
+ *     reconciles, and for the one still-unwired gap (writeNote/readNote have
+ *     no real commit-time trigger yet).
  * ==========================================================================
  */
 import * as vscode from "vscode";
+import { AttributionEngine } from "./core/engine.ts";
+import { CorroborationStore } from "./core/corroboration-store.ts";
 import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
 import type { AttributedRange, EngineLike, PersistenceLike, RepoBranchKey } from "./vscode-integration/contracts.ts";
 import { refreshDecorations } from "./vscode-integration/decorations.ts";
-import { MockAttributionEngine } from "./vscode-integration/mocks/mock-engine.ts";
-import { MockPersistence } from "./vscode-integration/mocks/mock-persistence.ts";
+import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
 import * as settings from "./vscode-integration/settings.ts";
 import { StatusBarController } from "./vscode-integration/status-bar.ts";
 import { WorkspaceAttributionProvider } from "./vscode-integration/workspace-view.ts";
@@ -36,10 +35,17 @@ import { WorkspaceAttributionProvider } from "./vscode-integration/workspace-vie
 const SAVE_DEBOUNCE_MS = 2000;
 
 export function activate(context: vscode.ExtensionContext): void {
-  // ---- MOCK-TO-REAL SWAP POINT: construct the real engine/persistence
-  // modules here instead, once Agents A/B clear their own exit criteria.
-  const engine: EngineLike = new MockAttributionEngine();
-  const persistence: PersistenceLike = new MockPersistence({ shareAttributionEnabled: settings.isShareAttributionEnabled() });
+  let folderScopesSyncSnapshot: { path: string; key: RepoBranchKey }[] = [];
+
+  const engine: EngineLike = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+  const gitExtension = vscode.extensions.getExtension("vscode.git");
+  const persistence: PersistenceLike = new RealPersistenceAdapter({
+    baseDir: vscode.Uri.joinPath(context.globalStorageUri, "attribution").fsPath,
+    retentionDays: settings.attributionRetentionDays(),
+    vscodeGitApi: gitExtension?.exports?.getAPI?.(1),
+    gitNotesConfig: () => ({ enabled: settings.isGitNotesSyncEnabled(), remote: settings.gitNotesRemote() }),
+    getRepoRoots: () => [...new Set(folderScopesSyncSnapshot.map((f) => f.key.repoRoot))],
+  });
 
   const dirtyTracker = new DirtyTracker();
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -57,8 +63,6 @@ export function activate(context: vscode.ExtensionContext): void {
     const folders = vscode.workspace.workspaceFolders ?? [];
     return Promise.all(folders.map(async (f) => ({ path: f.uri.fsPath, key: await keyFor(f) })));
   }
-
-  let folderScopesSyncSnapshot: { path: string; key: RepoBranchKey }[] = [];
 
   const workspaceView = new WorkspaceAttributionProvider(() => ({
     engine,
@@ -97,8 +101,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
     if (!folder) return undefined;
     const key = await keyFor(folder);
-    const contentHash = simpleHash(doc.getText());
-    return persistence.load(docIdFor(doc.uri), contentHash, key);
+    const text = doc.getText();
+    return persistence.load(docIdFor(doc.uri), simpleHash(text), key, text);
   }
 
   async function persistDoc(doc: vscode.TextDocument): Promise<void> {
@@ -107,7 +111,8 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!folder) return;
     const key = await keyFor(folder);
     const docId = docIdFor(doc.uri);
-    await persistence.save(docId, simpleHash(doc.getText()), key, engine.getRanges(docId));
+    const text = doc.getText();
+    await persistence.save(docId, simpleHash(text), key, engine.getRanges(docId), text);
   }
 
   function scheduleSave(doc: vscode.TextDocument): void {
@@ -188,21 +193,17 @@ export function activate(context: vscode.ExtensionContext): void {
       for (const { oldUri, newUri } of event.files) {
         const oldDocId = docIdFor(oldUri);
         const newDocId = docIdFor(newUri);
-        await persistence.rename(oldDocId, newDocId);
-        // ---- Contract gap flagged in the final report: EngineLike (§2)
-        // exposes no rename entry point at all, even though the real
-        // engine keeps in-memory state keyed by docId exactly like
-        // persistence does -- a rename would silently orphan it the same
-        // way GOAL1.md calls out as tourist-raw's own bug otherwise.
-        // Interim mechanical workaround until Agent A adds a real
-        // `rename` method: carry the current ranges over by hand via
-        // close+reopen, seeding the new docId with the old one's state.
-        const ranges = engine.getRanges(oldDocId);
-        engine.close(oldDocId);
-        if (ranges.length > 0) {
-          const doc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === newUri.fsPath);
-          if (doc) engine.open(newDocId, doc.getText(), ranges);
+        const folder = vscode.workspace.getWorkspaceFolder(newUri);
+        if (folder) {
+          const key = await keyFor(folder);
+          await persistence.rename(oldDocId, newDocId, key);
         }
+        // Real rename entry point on the engine (added during this
+        // consolidation, replacing the close+reopen workaround): moves live
+        // in-memory state -- ranges, undo/redo history, snapshot baseline --
+        // to the new docId in place, rather than losing anything not
+        // captured in a hand-carried ranges snapshot.
+        engine.renameDocument(oldDocId, newDocId);
       }
       await refreshWorkspaceState();
     }),

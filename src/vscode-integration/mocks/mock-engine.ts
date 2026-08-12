@@ -203,6 +203,13 @@ export class MockAttributionEngine implements EngineLike {
     return [...this.docs.keys()];
   }
 
+  renameDocument(oldDocId: string, newDocId: string): void {
+    const state = this.docs.get(oldDocId);
+    if (!state) return;
+    this.docs.delete(oldDocId);
+    this.docs.set(newDocId, state);
+  }
+
   // -- internals -------------------------------------------------------------
 
   private ensureDoc(docId: string): DocState {

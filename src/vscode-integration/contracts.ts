@@ -1,60 +1,28 @@
 /**
- * Stand-in copies of the cross-agent contract shapes from PLAN1.md Part 2
- * ("Interfaces / contracts"). Agent C (this module's owner) builds against
- * these rather than importing Agent A's `src/core/` or Agent B's
- * `src/persistence/` directly, per the module-ownership rule that no two
- * agents write into -- or depend at build time on the concrete files of --
- * another agent's directory while work is still parallelized.
+ * Sync point 1/2 (mock-to-real swap), done: this file no longer mirrors
+ * Agent A/B's contract shapes by hand -- it re-exports Agent A's real
+ * `src/core/index.ts` types verbatim and adds only the UI-side interface
+ * shapes (`EngineLike`, `PersistenceLike`) that describe what
+ * `src/vscode-integration/` needs from *some* engine/persistence
+ * implementation, real or mock, for dependency injection in tests.
  *
- * At Sync point 1/2 (mock-to-real swap), this file is deleted and every
- * import of it is repointed at Agent A's `src/core/index.ts` (which already
- * exports `AttributedRange`, `NormalizedChangeBatch`, etc. verbatim -- see
- * the final report) and Agent B's real persistence module. Every consumer in
- * this directory imports the shapes *from this file*, never inline, so that
- * swap is a one-line import change per file, not a rewrite.
+ * `EngineLike` now includes `renameDocument`, confirmed to exist for real on
+ * Agent A's `AttributionEngine` (src/core/engine.ts) as of this
+ * consolidation pass -- the close+reopen rename workaround in extension.ts
+ * that this method was meant to replace has been removed accordingly.
  */
 
-// -- Contract §2 (AttributedRange) + §1 (NormalizedChange*) --------------
-// Verified byte-for-byte against Agent A's actual src/core/types.ts.
-
-export type Origin = "ai" | "human" | "external" | null;
-export type Tier = "1" | "2a" | "2b" | "2c" | "3" | "4";
-
-export interface AttributedRange {
-  startOffset: number;
-  endOffset: number;
-  origin: Origin;
-  tier: Tier | null;
-  timestamp: number;
-}
-
-export interface NormalizedChange {
-  rangeOffset: number;
-  rangeLength: number;
-  text: string;
-}
-
-export type ChangeReason = "typed" | "undo" | "redo";
-
-export interface NormalizedChangeBatch {
-  docId: string;
-  changes: NormalizedChange[];
-  dirtyBefore: boolean;
-  dirtyAfter: boolean;
-  reason: ChangeReason;
-  timestamp?: number;
-}
-
-export interface WholeFileDiffInput {
-  docId: string;
-  newContent: string;
-  timestamp: number;
-  previousContent?: string;
-}
-
-export interface Disposable {
-  dispose(): void;
-}
+export type {
+  Origin,
+  Tier,
+  AttributedRange,
+  NormalizedChange,
+  ChangeReason,
+  NormalizedChangeBatch,
+  WholeFileDiffInput,
+  Disposable,
+} from "../core/index.ts";
+import type { AttributedRange, Disposable, NormalizedChangeBatch, WholeFileDiffInput } from "../core/index.ts";
 
 // -- Contract §2 (engine surface) -----------------------------------------
 //
@@ -64,13 +32,12 @@ export interface Disposable {
 // change [...]. It also exposes document lifecycle entry points (open --
 // optionally seeded with a restored AttributedRange[] [...] -- close, save)."
 //
-// `setGitOpSuppression` is NOT literal contract text -- flagged in the final
-// report as a gap the contract doc doesn't mention at all, even though Phase
-// 4's own exit criteria require *some* mechanism for it. Included here
-// because Agent A's real engine.ts independently arrived at the exact same
-// method name/signature while implementing Phase 1 (cross-checked directly
-// against src/core/engine.ts), which is a good sign the two sides converged
-// on the same shape rather than a coincidence to paper over.
+// `setGitOpSuppression`, `listTrackedDocIds`, and `renameDocument` are not
+// literal Part 2 contract text -- all three were flagged gaps in the
+// pre-consolidation handoff, and all three are now confirmed present for
+// real on Agent A's `AttributionEngine` (src/core/engine.ts) as of this
+// integration pass (listTrackedDocIds and setGitOpSuppression already
+// existed; renameDocument was added during consolidation).
 export interface EngineLike {
   open(docId: string, initialContent: string, restore?: AttributedRange[]): AttributedRange[];
   close(docId: string): void;
@@ -80,22 +47,14 @@ export interface EngineLike {
   onDidChangeRanges(listener: (docId: string) => void): Disposable;
   ingestWholeFileDiff(input: WholeFileDiffInput): AttributedRange[];
   setGitOpSuppression(workspaceId: string, suppressed: boolean): void;
-  /**
-   * NOT in the literal Part 2 contract text at all -- a real gap flagged in
-   * the final report. The status-bar rollup and the new workspace-level
-   * view (Phase 3) both need to aggregate `AttributedRange[]` across every
-   * *tracked* document, including ones never opened this session -- but
-   * §2's engine surface is entirely per-docId (open/getRanges/pushChanges
-   * take one docId at a time), with no enumeration method. Since Agent A's
-   * real engine already keeps every ingested document's state in an
-   * internal map (per the whole-file-diff path covering every tracked
-   * file), exposing that map's keys is a small, natural addition -- but it
-   * is an addition, not something Sync point 1's "should be a non-event if
-   * the contract held" already covers. Agent A needs to add the equivalent
-   * of this method to the real engine before Agent C's workspace-view can
-   * swap off the mock.
-   */
+  /** Every document identity this engine currently holds state for, tracked
+   * or untouched -- backs the workspace-level attribution view/panel. */
   listTrackedDocIds(): string[];
+  /** Moves a document's live in-memory engine state (ranges, undo/redo
+   * history, snapshot baseline) from `oldDocId` to `newDocId` in place.
+   * Replaces the close+reopen workaround extension.ts used before this
+   * method existed on the real engine. */
+  renameDocument(oldDocId: string, newDocId: string): void;
 }
 
 // -- Contract §1c (tracking-scope / exclusion predicate) ------------------
@@ -105,23 +64,41 @@ export interface ExclusionPredicate {
 
 // -- Contract §4 (persistence API) -----------------------------------------
 //
-// "Load: given a document identity's content-hash and its resolved
-// (repoRoot, branch) key, return a previously persisted AttributedRange[] if
-// the content hash matches, else nothing." Read literally this omits the
-// document's own path/identity from the *load* key -- but two different
-// files on the same branch with coincidentally identical content plainly
-// must not collide, so `docId` is included as an explicit key component
-// here (matching tourist-raw's actual persisted[branch][filePath] shape).
-// Flagged in the final report as a contract-text gap, not a real design
-// question.
+// This interface is the DI seam `extension.ts` programs against -- both
+// `MockPersistence` (tests) and `RealPersistenceAdapter`
+// (persistence-adapter.ts, wrapping Agent B's real `src/persistence/`)
+// implement it.
+//
+// REAL MISMATCH SURFACED DURING CONSOLIDATION (not papered over -- see the
+// integration report): Agent B's real `PersistenceManager` does not expose
+// `load`/`save` per-docId at all. It operates on Agent B's own
+// `AttributedRange` shape (fsPath + line-range + a `verified`/`inferred`/
+// `heuristic` attribution tier), keyed only by `(repoRoot, branch)`, and
+// returns/accepts the *entire* `PersistedStore` for that key in one call
+// (`load(key)` / `record(key, ranges)`), not a single docId's slice. There
+// is no `listPersisted` method either -- grouping the whole-key store by
+// `lastSeenFsPath` is exactly that operation, so `persistence-adapter.ts`
+// implements it as a thin projection rather than Agent B needing to add
+// anything. The deeper mismatch -- Agent A's offset-based piece-table
+// `AttributedRange` (this file's re-exported type) vs. Agent B's line-based,
+// differently-tiered one -- is real and is reconciled by the adapter via an
+// explicit, documented (lossy) conversion; see persistence-adapter.ts's own
+// header comment for the exact mapping and its limitations.
 export interface RepoBranchKey {
   repoRoot: string;
   branch: string;
 }
 
 export interface PersistenceLike {
-  load(docId: string, contentHash: string, key: RepoBranchKey): Promise<AttributedRange[] | undefined>;
-  save(docId: string, contentHash: string, key: RepoBranchKey, ranges: AttributedRange[]): Promise<void>;
+  /**
+   * `currentText` (added during consolidation, beyond the original contract
+   * text): the real adapter's per-range content-hash validation and
+   * offset<->line conversion both need the document's current full text,
+   * not just a single whole-file hash -- see persistence-adapter.ts.
+   * `MockPersistence` ignores it; its whole-file-hash gate never needed it.
+   */
+  load(docId: string, contentHash: string, key: RepoBranchKey, currentText: string): Promise<AttributedRange[] | undefined>;
+  save(docId: string, contentHash: string, key: RepoBranchKey, ranges: AttributedRange[], currentText: string): Promise<void>;
   /**
    * "given a document identity (its vscode.Uri, which only Agent C's side of
    * the boundary ever touches)" -- this is the one PersistenceLike method
@@ -129,25 +106,27 @@ export interface PersistenceLike {
    * contract design.
    */
   resolveKey(uri: VscodeUriLike): Promise<RepoBranchKey>;
-  rename(oldDocId: string, newDocId: string): Promise<void>;
   /**
-   * NOT in the literal Part 2 contract text -- the same enumeration gap as
-   * `EngineLike.listTrackedDocIds`, on the persistence side: a tracked file
-   * that was attributed in a *past* session and hasn't been touched since
-   * this activation lives only in Agent B's store, never entering Agent
-   * A's in-memory engine at all (lazy snapshot seeding, per Phase 4's
-   * large-repo performance row, means the engine does not eagerly load
-   * every tracked file at startup). The workspace-level view needs
-   * *someone's* enumeration to include that file; §4 as written only
-   * supports "load this one already-known docId," not "list everything
-   * persisted for this (repoRoot, branch)." Flagged for Agent B to confirm
-   * or provide an equivalent before the real swap.
+   * `key` (added during consolidation): the real adapter needs the
+   * *already-resolved* (repoRoot, branch) to re-key persisted history --
+   * re-deriving it from `newDocId`'s filesystem location instead would fail
+   * for a rename the caller already has full context for (e.g. moving a
+   * file such that `resolveKeyForFile` can't independently re-derive the
+   * same answer), and made the method untestable without a real on-disk
+   * repo at that path. The caller (extension.ts) already resolves this key
+   * for other calls in the same rename handler, so passing it through is
+   * free.
    */
+  rename(oldDocId: string, newDocId: string, key: RepoBranchKey): Promise<void>;
   listPersisted(key: RepoBranchKey): Promise<Array<{ docId: string; ranges: AttributedRange[] }>>;
 
-  // -- Git-notes API (Mode B only; no-ops when tourist.shareAttribution is
-  // off -- Agent C's settings UI only flips that setting and never branches
-  // on mode, per contract §4's "Mode toggle" paragraph).
+  // -- Git-notes API (Mode B only; no-ops when tourist.gitNotesSync is off).
+  // `writeNote`/`readNote` are NOT wired to a real commit-time trigger
+  // anywhere in this codebase yet (extension.ts never listens for "a commit
+  // just happened") -- flagged as a real, unimplemented gap in the
+  // integration report rather than fabricated here. `pushNotes`/`fetchNotes`
+  // (the two commands PLAN1.md actually specifies for v1) are wired for
+  // real, via Agent B's `src/persistence/gitNotes/commands.ts`.
   writeNote(commitSha: string, payload: AttributionNotePayload): Promise<void>;
   readNote(commitSha: string): Promise<AttributionNotePayload | undefined>;
   pushNotes(remote: string): Promise<void>;
@@ -155,11 +134,10 @@ export interface PersistenceLike {
 }
 
 /**
- * Structured git-notes payload shape. Not spelled out field-by-field
- * anywhere in PLAN1.md ("a structured attribution payload") -- this is
- * Agent C's own placeholder shape for mock purposes only, flagged in the
- * final report since Agent B owns the real shape and may finalize it
- * differently once Phase 0 experiment 7 lands.
+ * UI-side git-notes payload shape (offset-based, matching this file's
+ * `AttributedRange`). `persistence-adapter.ts` converts to/from Agent B's
+ * real `AttributionNote`/`AttributionNoteEntry` (line-based) shape at the
+ * boundary -- see that file's header comment.
  */
 export interface AttributionNotePayload {
   commitSha: string;

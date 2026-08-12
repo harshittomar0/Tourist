@@ -10,12 +10,10 @@
  *   forward unchanged): renamed because this toggle now hides/shows all
  *   three decoration types, not just the "ai" one, and keeping the old key
  *   would be actively misleading, not just an unrelated rename.
- * - `shareAttribution` matches GOAL1.md's locked-scope naming
- *   (`tourist.shareAttribution`, GOAL1.md line ~103) rather than PLAN1.md
- *   Part 2's `tourist.gitNotesSync` -- the two documents name this same
- *   toggle differently; GOAL1.md is treated as authoritative since it's the
- *   locked-scope document, but Agent B (who owns the toggle's actual read
- *   side) should confirm the key name before Sync point 2.
+ * - The sync toggle is `tourist.gitNotesSync`, the name standardized in the
+ *   ORCHESTRATOR_HANDOFF.md consolidation pass (GOAL1.md had drifted to
+ *   `tourist.shareAttribution` for the same setting; PLAN1.md Part 2's
+ *   `gitNotesSync` is authoritative).
  * - `gitNotesRemote` and `exclusionPolicy` are Agent C's own additions --
  *   neither document specifies how "push to a named remote" names that
  *   remote, or how the exclusion-policy override's extra patterns are
@@ -51,8 +49,8 @@ export function exclusionPolicyOverride(): string[] {
   return config().get<string[]>("exclusionPolicy", []);
 }
 
-export function isShareAttributionEnabled(): boolean {
-  return config().get<boolean>("shareAttribution", false);
+export function isGitNotesSyncEnabled(): boolean {
+  return config().get<boolean>("gitNotesSync", false);
 }
 
 export function gitNotesRemote(): string {
@@ -64,7 +62,7 @@ export const RELEVANT_CONFIG_KEYS = [
   "tourist.showAttributionMarkers",
   "tourist.attributionRetentionDays",
   "tourist.exclusionPolicy",
-  "tourist.shareAttribution",
+  "tourist.gitNotesSync",
   "tourist.gitNotesRemote",
 ] as const;
 

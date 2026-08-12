@@ -1,4 +1,4 @@
-import { test, describe } from "node:test";
+import { test, describe } from "vitest";
 import assert from "node:assert/strict";
 import { PieceTable, type RangeEdit } from "../../src/core/piece-table.ts";
 
@@ -49,10 +49,14 @@ describe("PieceTable", () => {
     // applyBatch in *ascending* offset order -- exercising the defense
     // against MS #11487/#111548 (contentChanges may not arrive
     // bottom-to-top).
-    const ascending = new PieceTable(10);
+    // Fixed initial timestamp (rather than the constructor's Date.now()
+    // default) -- two separately-constructed tables compared via
+    // deepEqual below must not flake if the two `new PieceTable(...)` calls
+    // happen to straddle a millisecond boundary.
+    const ascending = new PieceTable(10, null, null, 0);
     ascending.applyBatch([edit(2, 0, 2, "ai", "2a"), edit(7, 0, 2, "human")]);
 
-    const descending = new PieceTable(10);
+    const descending = new PieceTable(10, null, null, 0);
     descending.applyBatch([edit(7, 0, 2, "human"), edit(2, 0, 2, "ai", "2a")]);
 
     assert.deepEqual(ascending.toRanges(), descending.toRanges());
@@ -73,7 +77,9 @@ describe("PieceTable", () => {
       edit(5, 0, 1, "ai", "1"),
       edit(0, 0, 1, "human"),
     ];
-    const base = () => new PieceTable(25);
+    // Fixed initial timestamp for the same reason as the test above -- three
+    // separate `new PieceTable(...)` calls compared via deepEqual.
+    const base = () => new PieceTable(25, null, null, 0);
 
     const inOrder = base();
     inOrder.applyBatch(edits);

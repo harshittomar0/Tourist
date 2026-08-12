@@ -1,8 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { defaultGitRunner } from "../gitPlumbing.js";
 import { readNote, writeNote } from "../notesStore.js";
@@ -80,7 +79,7 @@ describe("installHook", () => {
 });
 
 // Project root: src/persistence/gitNotes/__tests__ -> ../../../.. is the repo root.
-const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
+const REPO_ROOT = resolve(__dirname, "..", "..", "..", "..");
 const HOOK_RUNNER_PATH = join(REPO_ROOT, "dist", "persistence", "gitNotes", "hookRunner.js");
 
 /**
@@ -99,7 +98,7 @@ describe("handlePostCommit — cherry-pick continuity, invoked as a real live ho
   let sourceSha: string;
 
   beforeAll(() => {
-    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: REPO_ROOT });
+    execFileSync("npx", ["tsc", "-p", "tsconfig.build.json"], { cwd: REPO_ROOT });
   }, 60_000);
 
   beforeEach(async () => {
