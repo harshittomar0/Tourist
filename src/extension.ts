@@ -408,31 +408,51 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
       const dirtyBefore = dirtyTracker.consume(docId, event.document.isDirty);
       const batch = toNormalizedChangeBatch(event, dirtyBefore, vscode.TextDocumentChangeReason);
       if (!batch || !settings.isTrackingEnabled()) return;
+
+      const isDiskWrite = !batch.dirtyBefore && !batch.dirtyAfter;
+      const isHookConfirmedWrite = isDiskWrite && hookLogReader.matchesContent(docId, hashContent(event.document.getText()));
+
+      // A clean-before-and-after change is a disk write this document's
+      // editor didn't cause -- most often git (checkout/rebase/stash/...)
+      // reverting it back to content Tourist has seen (and persisted
+      // attribution for) before. The *previous* fix for this gated
+      // re-fetching that persisted attribution on `gitSuppressTimers`, i.e.
+      // on whether `markGitActivity` had already run for this workspace --
+      // but per spike/FINDINGS.md Experiment 6, `repo.state.onDidChange`
+      // (`markGitActivity`'s only trigger) lags the git command that caused
+      // it by 1.2-3.5s, while *this* event fires within milliseconds of the
+      // write; live E2E testing (test/e2e/suite/07-git-stash-attribution)
+      // against a real stash push/pop round trip found that signal often
+      // doesn't arrive noticeably faster for `add`/`commit`/`stash` than
+      // that gap allows, or doesn't arrive at all for a long while -- so
+      // gating on it left a real stash pop's content misclassified
+      // "external" instead of restored. Look this content up in persisted,
+      // content-hash-keyed history *unconditionally* (not gated on any
+      // git-event signal at all) instead: a real match only exists for
+      // content Tourist has genuinely seen before, so this can't misfire
+      // for genuinely new content (a live hook-confirmed AI write, a
+      // formatter, ...) -- persistence.load returns undefined and the
+      // normal classification path below runs exactly as before.
+      if (isDiskWrite && !isHookConfirmedWrite) {
+        void restoreFor(event.document).then((restored) => {
+          if (restored !== undefined) {
+            engine.reload(docId, event.document.getText(), restored);
+          } else {
+            engine.pushChanges(batch);
+          }
+          scheduleSave(event.document);
+          for (const editor of vscode.window.visibleTextEditors) {
+            if (editor.document === event.document) refreshEditorDecorations(editor);
+          }
+          void statusBar.refresh();
+        });
+        return;
+      }
+
       engine.pushChanges(batch);
       scheduleSave(event.document);
       for (const editor of vscode.window.visibleTextEditors) {
         if (editor.document === event.document) refreshEditorDecorations(editor);
-      }
-
-      // A clean-before-and-after change during an active git-op suppression
-      // window (see `markGitActivity` above) can only be git reverting this
-      // document's on-disk content -- a stash pop, rebase, or any other git
-      // op that isn't a branch change (BranchWatcher above already handles
-      // those). Re-fetch persisted, content-hash-keyed attribution for the
-      // *new* content instead of leaving it as whatever `pushChanges` just
-      // (correctly) left unmarked. Excludes a hook-confirmed tier-1 write --
-      // a real, just-verified Claude Code edit racing the same suppression
-      // window is not a git revert, and reloading over it would blow away
-      // attribution persistence hasn't caught up to yet (it saves on a
-      // debounce), the same tier-1 carve-out `reclassifyRecentDiskWrites`
-      // (engine.ts, tourist-18's fix) makes for the identical reason.
-      const isDiskWrite = !batch.dirtyBefore && !batch.dirtyAfter;
-      const workspaceRoot = workspaceRootForPath(event.document.uri.fsPath);
-      if (isDiskWrite && workspaceRoot && gitSuppressTimers.has(workspaceRoot)) {
-        const isHookConfirmedWrite = hookLogReader.matchesContent(docId, hashContent(event.document.getText()));
-        if (!isHookConfirmedWrite) {
-          void reloadAfterGitChange([workspaceRoot]).then(() => void statusBar.refresh());
-        }
       }
     }),
 
