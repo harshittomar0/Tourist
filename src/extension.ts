@@ -37,6 +37,7 @@ import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
 import type { AttributedRange, EngineLike, PersistenceLike, RepoBranchKey } from "./vscode-integration/contracts.ts";
 import { refreshDecorations } from "./vscode-integration/decorations.ts";
+import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map/commands.ts";
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
 import * as settings from "./vscode-integration/settings.ts";
 import { StatusBarController } from "./vscode-integration/status-bar.ts";
@@ -387,6 +388,8 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshVisibleDecorations,
     refreshStatusBar: () => statusBar.refresh(),
   });
+
+  registerKnowledgeMapCommands(context);
 }
 
 export function deactivate(): void {}

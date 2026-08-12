@@ -47,6 +47,14 @@
       {
         "command": "tourist.fetchAttributionNotes",
         "title": "Tourist: Fetch Attribution Notes"
+      },
+      {
+        "command": "tourist.generateKnowledgeMap",
+        "title": "Tourist: Generate Knowledge Map"
+      },
+      {
+        "command": "tourist.showKnowledgeMap",
+        "title": "Tourist: Show Knowledge Map"
       }
     ],
     "configuration": {
@@ -82,6 +90,31 @@
           "type": "string",
           "default": "origin",
           "description": "The git remote name used by Push/Fetch Attribution Notes, when tourist.gitNotesSync is on."
+        },
+        "tourist.knowledgeMap.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Off by default. Master opt-in for the Knowledge Map feature, which sends repo evidence (git diffs, commit messages, and optionally Claude Code prompt history) to Claude to infer a developer-knowledge map. When off, the Generate/Show Knowledge Map commands do nothing but point you at this setting."
+        },
+        "tourist.knowledgeMap.claudeBackend": {
+          "type": "string",
+          "enum": ["cli", "api-key"],
+          "enumDescriptions": [
+            "Ride on your already-logged-in Claude Code CLI session -- no separate API key to manage.",
+            "Call the Anthropic API directly. Requires an API key, which you'll be prompted for once and which is stored in VS Code's secret storage, never in plain settings."
+          ],
+          "default": "cli",
+          "description": "Which backend the Knowledge Map analyser uses to talk to Claude."
+        },
+        "tourist.knowledgeMap.claudeCliPath": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path to the Claude Code CLI executable, used when tourist.knowledgeMap.claudeBackend is \"cli\"."
+        },
+        "tourist.knowledgeMap.model": {
+          "type": "string",
+          "default": "claude-sonnet-5",
+          "description": "Claude model used for Knowledge Map analysis."
         }
       }
     },

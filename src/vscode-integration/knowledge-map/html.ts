@@ -1,0 +1,294 @@
+/**
+ * Pure string transforms over ideation/knowledge-forest/ui/knowledge-forest.html's
+ * *content* -- this module never writes to that file. Scope explicitly
+ * excludes touching ideation/knowledge-forest/ internals, and that file's
+ * demo data + lack of any vscode.postMessage wiring means the loader/wiring
+ * it needs (per its own PLAN.md "Not built yet" section) has to be layered
+ * on from outside, at render time, in this extension's own code.
+ *
+ * Three transforms, applied in order by buildKnowledgeMapHtml:
+ *  1. injectRealForestData -- replaces the three hardcoded demo arrays with
+ *     the real persisted forest, anchored on stable substrings so a small
+ *     upstream formatting change degrades to "keep demo data for that
+ *     section" instead of producing broken HTML.
+ *  2. injectContentSecurityPolicy -- adds a nonce'd CSP <meta> and nonces
+ *     the original inline <script> tag.
+ *  3. injectOverrideBridge -- appends a second nonce'd <script> that wires
+ *     the existing confirm/reject/rename/addChild/delete/dot actions to
+ *     vscode.postMessage, purely by DOM inspection (see its header comment
+ *     for why that's possible without touching the original script), plus
+ *     a checkbox multi-select + "Deep Dive on Selected" affordance.
+ */
+import * as crypto from "node:crypto";
+import type { ForestFile, ForestKind, ForestNode } from "./types.ts";
+
+export function makeNonce(): string {
+  return crypto.randomBytes(16).toString("base64");
+}
+
+interface UiNode extends Omit<ForestNode, "children" | "latent"> {
+  children: UiNode[];
+  latent: UiNode[];
+  expanded: boolean;
+}
+
+function hydrate(nodes: ForestNode[]): UiNode[] {
+  return nodes.map((n) => ({
+    ...n,
+    expanded: true,
+    children: hydrate(n.children),
+    latent: hydrate(n.latent),
+  }));
+}
+
+const SECTION_ANCHORS: Record<ForestKind, { varName: string; start: string; end: string }> = {
+  tech: { varName: "techForestData", start: "var techForestData = [", end: "\n\n  var csForestData" },
+  cs: { varName: "csForestData", start: "var csForestData = [", end: "\n\n  var practiceForestData" },
+  practice: {
+    varName: "practiceForestData",
+    start: "var practiceForestData = [",
+    end: "\n\n  // ---------------- rendering",
+  },
+};
+
+/**
+ * ui/knowledge-forest.html's own `mkNode` also assigns an `id` -- omitted
+ * here since the rendering code only reads `id` for `data-id` attributes
+ * used to dispatch actions back into its own closures, which is exactly the
+ * "existing" behavior we leave untouched. The bridge script (below) never
+ * relies on `id` at all, precisely because it isn't stable/meaningful
+ * outside a single page load -- it derives node identity from rendered
+ * label text instead.
+ */
+function replaceSection(html: string, kind: ForestKind, data: UiNode[]): string {
+  const { varName, start, end } = SECTION_ANCHORS[kind];
+  const startIdx = html.indexOf(start);
+  if (startIdx === -1) return html;
+  const endIdx = html.indexOf(end, startIdx);
+  if (endIdx === -1) return html;
+  const replacement = `var ${varName} = ${JSON.stringify(data)};`;
+  return html.slice(0, startIdx) + replacement + html.slice(endIdx);
+}
+
+export function injectRealForestData(html: string, forest: ForestFile): string {
+  let out = html;
+  out = replaceSection(out, "tech", hydrate(forest.tech));
+  out = replaceSection(out, "cs", hydrate(forest.cs));
+  out = replaceSection(out, "practice", hydrate(forest.practice));
+  return out;
+}
+
+export function injectContentSecurityPolicy(html: string, nonce: string, cspSource: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">`;
+  const withMeta = html.includes("</head>") ? html.replace("</head>", `${meta}\n</head>`) : meta + html;
+  // Exactly one un-attributed `<script>` tag exists in the source file (the
+  // demo IIFE) -- nonce it so it still runs under the CSP above.
+  return withMeta.replace("<script>", `<script nonce="${nonce}">`);
+}
+
+/**
+ * The bridge script below never reads any of the original script's private
+ * `data`/`createForest` closures -- it can't; they're not exposed on
+ * `window`. Instead it derives a node's identity from the *rendered DOM*:
+ * each `.node-row`'s `.label` text, walked up through ancestor `<li>`s to
+ * the enclosing `.stack-card`'s root row, reconstructs the exact label path
+ * mergeForest.ts already matches nodes by. That also means it's naturally
+ * robust to the original script's internal `id` values being page-load-
+ * ephemeral (`nextId` resets to 1000 on every reload).
+ *
+ * Ordering: this script is appended just before `</body>`, i.e. it always
+ * runs *after* the original inline script has defined `createForest` and
+ * attached its own listeners to `#forest-tech`/`#forest-cs`/`#forest-practice`
+ * and the three "+ Add ..." buttons. Multiple listeners on the same element
+ * for the same event fire in registration order, so every listener this
+ * script adds on those same elements is guaranteed to run *after* the
+ * original's -- i.e. after any mutation, `window.prompt`/`window.confirm`
+ * dialog, and `render()` call the click triggered. `window.prompt` and
+ * `window.confirm` are monkey-patched so this script can observe what the
+ * user actually typed/decided, since the click handler that calls them is
+ * the original (un-modified) one.
+ */
+const OVERRIDE_BRIDGE_SOURCE = `
+(function () {
+  var vscodeApi = acquireVsCodeApi();
+
+  var lastPromptValue = null;
+  var nativePrompt = window.prompt;
+  window.prompt = function (message, def) {
+    lastPromptValue = nativePrompt.call(window, message, def);
+    return lastPromptValue;
+  };
+
+  var lastConfirmValue = true;
+  var nativeConfirm = window.confirm;
+  window.confirm = function (message) {
+    lastConfirmValue = nativeConfirm.call(window, message);
+    return lastConfirmValue;
+  };
+
+  function post(msg) {
+    vscodeApi.postMessage(msg);
+  }
+
+  function countFilledDots(row) {
+    return row.querySelectorAll(".dots .dot.filled").length;
+  }
+
+  // Reconstructs the label path from the forest root down to \`row\`, purely
+  // from rendered text -- see this module's header comment for why.
+  function pathFromRow(row) {
+    if (row.classList.contains("is-root")) {
+      var rootLabel = row.querySelector(".label");
+      return rootLabel ? [rootLabel.textContent] : [];
+    }
+    var path = [];
+    var li = row.closest("li");
+    while (li) {
+      var ownRow = li.querySelector(":scope > .node-row");
+      var lbl = ownRow ? ownRow.querySelector(".label") : null;
+      if (lbl) path.unshift(lbl.textContent);
+      var ul = li.parentElement;
+      var container = ul ? ul.parentElement : null;
+      if (container && container.classList && container.classList.contains("stack-card")) {
+        var rootLbl = container.querySelector(":scope > .node-row.is-root > .label");
+        if (rootLbl) path.unshift(rootLbl.textContent);
+        li = null;
+      } else if (container && container.tagName === "LI") {
+        li = container;
+      } else {
+        li = null;
+      }
+    }
+    return path;
+  }
+
+  function wireForest(forestElId, kind) {
+    var el = document.getElementById(forestElId);
+    if (!el) return;
+
+    el.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      var action = btn.getAttribute("data-action");
+      var row = btn.closest(".node-row");
+      if (!row) return;
+      var path = pathFromRow(row);
+      if (path.length === 0) return;
+
+      if (action === "confirm") {
+        var current = countFilledDots(row);
+        post({ type: "nodeOverride", forest: kind, path: path, action: "confirm", value: current > 0 ? current : 2 });
+      } else if (action === "reject") {
+        post({ type: "nodeOverride", forest: kind, path: path, action: "reject" });
+      } else if (action === "dot") {
+        post({ type: "nodeOverride", forest: kind, path: path, action: "proficiency", value: Number(btn.getAttribute("data-value")) });
+      } else if (action === "rename") {
+        if (lastPromptValue) post({ type: "nodeOverride", forest: kind, path: path, action: "rename", value: lastPromptValue });
+      } else if (action === "addchild") {
+        if (lastPromptValue) post({ type: "nodeOverride", forest: kind, path: path, action: "addChild", value: lastPromptValue });
+      } else if (action === "delete" || action === "deletestack") {
+        if (lastConfirmValue) post({ type: "nodeOverride", forest: kind, path: path, action: "delete" });
+      }
+      lastPromptValue = null;
+    });
+
+    var addBtn = document.getElementById("addStackBtn-" + kind);
+    if (addBtn) {
+      addBtn.addEventListener("click", function () {
+        if (lastPromptValue) post({ type: "nodeOverride", forest: kind, path: [], action: "addChild", value: lastPromptValue });
+        lastPromptValue = null;
+      });
+    }
+  }
+
+  ["tech", "cs", "practice"].forEach(function (kind) {
+    wireForest("forest-" + kind, kind);
+  });
+
+  // ---- Deep-dive multi-select -------------------------------------------
+  // Injects a checkbox into every rendered node row and a floating
+  // "Deep Dive on Selected" bar. Rows get fully rebuilt by the original
+  // script's render() on every action, so a MutationObserver re-decorates
+  // after every rebuild rather than assuming the checkbox survives.
+  var selections = new Map();
+
+  function updateDeepDiveBar() {
+    var n = selections.size;
+    deepDiveCount.textContent = n + (n === 1 ? " topic selected" : " topics selected");
+    deepDiveBtn.disabled = n === 0;
+  }
+
+  function decorateRow(row, kind) {
+    if (row.querySelector(".km-select-checkbox")) return;
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "km-select-checkbox";
+    cb.title = "Select for deep dive";
+    cb.style.marginRight = "4px";
+    cb.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    cb.addEventListener("change", function () {
+      var path = pathFromRow(row);
+      if (path.length === 0) return;
+      var key = kind + "|" + JSON.stringify(path);
+      if (cb.checked) selections.set(key, path[path.length - 1]);
+      else selections.delete(key);
+      updateDeepDiveBar();
+    });
+    row.insertBefore(cb, row.firstChild);
+  }
+
+  function decorateAll() {
+    ["tech", "cs", "practice"].forEach(function (kind) {
+      var el = document.getElementById("forest-" + kind);
+      if (!el) return;
+      el.querySelectorAll(".node-row").forEach(function (row) {
+        decorateRow(row, kind);
+      });
+    });
+  }
+
+  ["forest-tech", "forest-cs", "forest-practice"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    new MutationObserver(decorateAll).observe(el, { childList: true, subtree: true });
+  });
+  decorateAll();
+
+  var deepDiveBar = document.createElement("div");
+  deepDiveBar.style.cssText =
+    "position:fixed;bottom:16px;right:16px;background:var(--surface-1);border:1px solid var(--border);" +
+    "border-radius:8px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:9999;font-size:12.5px;" +
+    "color:var(--text-primary);display:flex;align-items:center;gap:10px;font-family:inherit;";
+  var deepDiveCount = document.createElement("span");
+  var deepDiveBtn = document.createElement("button");
+  deepDiveBtn.type = "button";
+  deepDiveBtn.textContent = "Deep Dive on Selected";
+  deepDiveBtn.disabled = true;
+  deepDiveBtn.style.cssText =
+    "font-weight:600;border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;" +
+    "background:var(--surface-1);color:var(--text-primary);";
+  deepDiveBtn.addEventListener("click", function () {
+    if (selections.size === 0) return;
+    post({ type: "deepDive", topics: Array.from(selections.values()) });
+  });
+  deepDiveBar.appendChild(deepDiveCount);
+  deepDiveBar.appendChild(deepDiveBtn);
+  document.body.appendChild(deepDiveBar);
+  updateDeepDiveBar();
+})();
+`;
+
+export function injectOverrideBridge(html: string, nonce: string): string {
+  const bridge = `<script nonce="${nonce}">${OVERRIDE_BRIDGE_SOURCE}</script>`;
+  return html.includes("</body>") ? html.replace("</body>", `${bridge}\n</body>`) : html + bridge;
+}
+
+export function buildKnowledgeMapHtml(rawHtml: string, forest: ForestFile, cspSource: string): string {
+  const nonce = makeNonce();
+  let html = injectRealForestData(rawHtml, forest);
+  html = injectContentSecurityPolicy(html, nonce, cspSource);
+  html = injectOverrideBridge(html, nonce);
+  return html;
+}
