@@ -7,7 +7,14 @@ import type { ForestFile, ForestNode } from "../types.js";
  *    not proficiency, not evidence, not children. A new AI run that
  *    disagrees with a human-confirmed node is simply wrong for this run;
  *    it doesn't get to overwrite the record.
- *  - "ai" nodes ARE allowed to update: this run's fresher inference
+ *  - "tracked" nodes are also human-labeled (typically added directly in
+ *    the UI, with no prior AI proposal) but — unlike "confirmed" — carry no
+ *    assessed proficiency yet. proficiency/evidence/children/latent DO
+ *    update from a fresh matching "ai" guess, same as a plain "ai" node
+ *    would; only the label and the "tracked" provenance itself are frozen,
+ *    so the category can't be silently renamed or reclassified out from
+ *    under the human who declared it. See types.ts for the full rationale.
+ *  - "ai" nodes ARE allowed to update fully: this run's fresher inference
  *    replaces the previous ai-provenance guess for that label, since an
  *    unconfirmed guess is exactly what's supposed to improve over time.
  *  - A label with no match in `existing` is a genuinely new node —
@@ -43,6 +50,19 @@ function mergeNodeList(existing: ForestNode[], incoming: ForestNode[]): ForestNo
       // Django might grow in the future.
       merged[idx] = {
         ...current,
+        children: mergeNodeList(current.children, incomingNode.children),
+        latent: mergeNodeList(current.latent, incomingNode.latent)
+      };
+      continue;
+    }
+
+    if (current.provenance === "tracked") {
+      // Label and "tracked" status stand; proficiency/evidence track the
+      // fresh guess exactly like an "ai" node would (see types.ts).
+      merged[idx] = {
+        ...current,
+        proficiency: incomingNode.proficiency,
+        evidence: incomingNode.evidence,
         children: mergeNodeList(current.children, incomingNode.children),
         latent: mergeNodeList(current.latent, incomingNode.latent)
       };

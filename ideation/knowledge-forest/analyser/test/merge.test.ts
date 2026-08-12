@@ -65,6 +65,67 @@ describe("mergeForest", () => {
     expect(result.tech).toHaveLength(1);
   });
 
+  it("updates a tracked node's proficiency/evidence from a fresh ai guess, but keeps it tracked", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Rust", provenance: "tracked", proficiency: 1, evidence: [] })]
+    };
+    const incoming: ForestFile = {
+      ...empty(),
+      tech: [
+        node({
+          label: "Rust",
+          provenance: "ai",
+          proficiency: 3,
+          evidence: [{ source: "git", ref: "abc123", detail: "Cargo.toml added" }]
+        })
+      ]
+    };
+
+    const result = mergeForest(existing, incoming);
+
+    expect(result.tech).toHaveLength(1);
+    expect(result.tech[0].provenance).toBe("tracked"); // stays tracked, not overwritten to "ai"
+    expect(result.tech[0].proficiency).toBe(3); // proficiency DOES update, unlike confirmed/gap
+    expect(result.tech[0].evidence).toEqual([{ source: "git", ref: "abc123", detail: "Cargo.toml added" }]);
+  });
+
+  it("leaves a tracked node untouched when no incoming guess matches its label", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Rust", provenance: "tracked", proficiency: 1 })]
+    };
+    const incoming = empty();
+
+    const result = mergeForest(existing, incoming);
+
+    expect(result.tech[0]).toMatchObject({ provenance: "tracked", proficiency: 1 });
+  });
+
+  it("recurses into a tracked parent's children the same way it does for ai nodes", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Rust", provenance: "tracked", proficiency: 1, children: [] })]
+    };
+    const incoming: ForestFile = {
+      ...empty(),
+      tech: [
+        node({
+          label: "Rust",
+          provenance: "ai",
+          proficiency: 2,
+          children: [node({ label: "Ownership & borrowing", provenance: "ai", proficiency: 2 })]
+        })
+      ]
+    };
+
+    const result = mergeForest(existing, incoming);
+
+    expect(result.tech[0].provenance).toBe("tracked");
+    expect(result.tech[0].children).toHaveLength(1);
+    expect(result.tech[0].children[0].label).toBe("Ownership & borrowing");
+  });
+
   it("recurses into a confirmed parent's children so new sub-nodes can still be proposed", () => {
     const existing: ForestFile = {
       ...empty(),
