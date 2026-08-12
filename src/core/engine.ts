@@ -20,6 +20,19 @@ import type {
 // memory without limit -- ported from tourist-raw's tracker.ts.
 const MAX_HISTORY_PER_DOC = 50;
 
+/**
+ * Grace window `setGitOpSuppression(true)` retroactively reclassifies over
+ * (see below). `spike/FINDINGS.md` Experiment 6's live measurements of
+ * `vscode.git`'s `repository.state.onDidChange` -- `checkout -b` observed
+ * in 1.19s, `checkout main` in 3.29s, "both...reliably under ~4s" -- are the
+ * basis for this: that event (the extension.ts wiring's only signal to call
+ * `setGitOpSuppression`) can lag the actual git command by several seconds,
+ * long enough for Tourist's own disk watchers to classify the resulting
+ * write as "ai"/"external" *before* suppression turns on. 4s covers the
+ * spike's observed worst case with margin.
+ */
+const GIT_OP_RETROACTIVE_WINDOW_MS = 4000;
+
 interface DocState {
   pieceTable: PieceTable;
   /** Mirror of the document's current full text. Maintained independently
@@ -243,8 +256,37 @@ export class AttributionEngine {
    * the contract expose one. See the final report.
    */
   setGitOpSuppression(workspaceId: string, suppressed: boolean): void {
-    if (suppressed) this.suppressedWorkspaces.add(workspaceId);
-    else this.suppressedWorkspaces.delete(workspaceId);
+    if (suppressed) {
+      this.suppressedWorkspaces.add(workspaceId);
+      this.reclassifyRecentDiskWrites(workspaceId, Date.now());
+    } else {
+      this.suppressedWorkspaces.delete(workspaceId);
+    }
+  }
+
+  /**
+   * The other half of the grace window documented at
+   * `GIT_OP_RETROACTIVE_WINDOW_MS`: corrects anything in this workspace's
+   * open/tracked docs that a disk-write heuristic tagged "ai"/"external" in
+   * the last `GIT_OP_RETROACTIVE_WINDOW_MS`ms, now that we know it was
+   * actually a git op. Deliberately excludes tier "1" (a real content-hash
+   * match against the attribution hook log) -- that's a confirmed Claude
+   * Code write, not a heuristic guess, and coincidentally landing inside a
+   * suppression window doesn't make it any less real.
+   */
+  private reclassifyRecentDiskWrites(workspaceId: string, now: number): void {
+    const resolveWorkspaceId = this.deps.resolveWorkspaceId ?? identity;
+    const since = now - GIT_OP_RETROACTIVE_WINDOW_MS;
+    for (const [docId, state] of this.docs) {
+      if (resolveWorkspaceId(docId) !== workspaceId) continue;
+      const changed = state.pieceTable.reclassify(
+        (piece) =>
+          piece.timestamp >= since && (piece.origin === "ai" || piece.origin === "external") && piece.tier !== "1"
+      );
+      if (!changed) continue;
+      this.rememberHistory(state, hashContent(state.content));
+      this.notify(docId);
+    }
   }
 
   // -- Enumeration + rename (added post-Phase-1, per PLAN1.md Part 2 §7 -----

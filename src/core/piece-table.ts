@@ -151,6 +151,31 @@ export class PieceTable {
     return null;
   }
 
+  /**
+   * Retroactively nulls out (origin/tier -> null) every piece for which
+   * `predicate` returns true, keeping its length and timestamp untouched.
+   * Returns whether anything actually changed.
+   *
+   * Backs engine.ts's git-op-suppression grace period: `spike/FINDINGS.md`
+   * Experiment 6 measured `vscode.git`'s `repository.state.onDidChange`
+   * firing 1.2-3.5s *after* the git command that caused it, while Tourist's
+   * own disk watchers react far faster -- so a git-caused disk write can be
+   * classified "ai"/"external" before suppression turns on. Once it does
+   * turn on, the caller uses this to correct anything misclassified during
+   * that race window instead of only guarding writes from that point
+   * forward.
+   */
+  reclassify(predicate: (piece: { origin: Origin; tier: Tier | null; timestamp: number }) => boolean): boolean {
+    let changed = false;
+    const next = this.pieces.map((piece) => {
+      if (!predicate(piece)) return piece;
+      changed = true;
+      return { ...piece, origin: null, tier: null };
+    });
+    if (changed) this.pieces = mergeAdjacent(next);
+    return changed;
+  }
+
   toRanges(): AttributedRange[] {
     const ranges: AttributedRange[] = [];
     let cursor = 0;

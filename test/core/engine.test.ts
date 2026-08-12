@@ -114,6 +114,79 @@ describe("AttributionEngine -- live editing path", () => {
     assert.deepEqual(originsOf(engine.getRanges("doc1")), [["null", "null"]]);
   });
 
+  test("race: a disk write classified before setGitOpSuppression(true) is retroactively unmarked once suppression arrives", () => {
+    // Reproduces the real-world race: vscode.git's repository.state.onDidChange
+    // (extension.ts's only trigger for setGitOpSuppression) fires 1.2-3.5s
+    // *after* the git command that caused it (spike/FINDINGS.md Experiment
+    // 6), while Tourist's own disk watcher reacts far faster. So the disk
+    // write from `git checkout -b tmp` lands and gets classified (here:
+    // ai/2a, corroborated by a stale lock file) *before* suppression turns
+    // on -- the opposite of the intended ordering.
+    const store = new CorroborationStore();
+    store.setSignal("ws1", { source: "lock-file", active: true, since: 0 });
+    const engine = new AttributionEngine({ corroborationStore: store, resolveWorkspaceId: () => "ws1" });
+    engine.open("doc1", "");
+    engine.pushChanges(
+      insertBatch("doc1", 0, "checked out content", { dirtyBefore: false, dirtyAfter: false, timestamp: Date.now() })
+    );
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "2a"]]);
+
+    // The git extension's event finally arrives, shortly after the write it
+    // was meant to guard.
+    engine.setGitOpSuppression("ws1", true);
+
+    // Fixed: retroactively corrected to unmarked, not left as a
+    // misattributed "ai" edit.
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["null", "null"]]);
+  });
+
+  test("race grace period does not touch a genuine tier-1 hook match, even inside the window", () => {
+    const store = new CorroborationStore();
+    const hookLogReader: import("../../src/core/adapter-interfaces.ts").HookLogReaderAdapter = {
+      install: async () => ({ alreadyInstalled: true }),
+      isInstalled: async () => true,
+      matchesContent: () => true,
+      matchesSpan: () => false,
+      onDidAppendRecord: () => ({ dispose: () => {} }),
+      dispose: () => {},
+    };
+    const engine = new AttributionEngine({ corroborationStore: store, resolveWorkspaceId: () => "ws1", hookLogReader });
+    engine.open("doc1", "");
+    engine.pushChanges(
+      insertBatch("doc1", 0, "claude wrote this", { dirtyBefore: false, dirtyAfter: false, timestamp: Date.now() })
+    );
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "1"]]);
+
+    engine.setGitOpSuppression("ws1", true);
+
+    // A real, content-hash-confirmed AI write isn't a heuristic guess caught
+    // in the git-op race -- it must survive the retroactive pass unchanged.
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [["ai", "1"]]);
+  });
+
+  test("race grace period does not touch a recent human edit, or a disk write outside the window", () => {
+    const store = new CorroborationStore();
+    const engine = new AttributionEngine({ corroborationStore: store, resolveWorkspaceId: () => "ws1" });
+    engine.open("doc1", "");
+    // Recent, but "human" -- never eligible for retroactive reclassification
+    // regardless of timing.
+    engine.pushChanges(
+      insertBatch("doc1", 0, "human typed", { dirtyBefore: true, dirtyAfter: true, timestamp: Date.now() })
+    );
+    // Old enough (a stale fixture timestamp, nowhere near real Date.now())
+    // to fall outside the retroactive window even though its origin/tier
+    // would otherwise be eligible.
+    engine.pushChanges(
+      insertBatch("doc1", 11, "old external write", { dirtyBefore: false, dirtyAfter: false, timestamp: 1000 })
+    );
+
+    engine.setGitOpSuppression("ws1", true);
+    assert.deepEqual(originsOf(engine.getRanges("doc1")), [
+      ["human", "null"],
+      ["external", "3"],
+    ]);
+  });
+
   test("an out-of-order multi-range batch (deliberately reversed) produces the same result as an in-order one", () => {
     const engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
     engine.open("doc1", "0123456789");
