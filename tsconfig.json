@@ -14,5 +14,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["src", "test"],
-  "exclude": ["node_modules", ".vscode-test", "dist", "spike"]
+  "exclude": ["node_modules", ".vscode-test", "dist", "spike", "vitest.config.ts"]
 }
