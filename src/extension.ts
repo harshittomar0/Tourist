@@ -45,7 +45,7 @@ import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
 import * as settings from "./vscode-integration/settings.ts";
 import { StatusBarController } from "./vscode-integration/status-bar.ts";
-import { WorkspaceAttributionProvider } from "./vscode-integration/workspace-view.ts";
+import { WorkspaceAttributionProvider, type RollupNode } from "./vscode-integration/workspace-view.ts";
 
 const SAVE_DEBOUNCE_MS = 2000;
 /** How long a git-op-suppression window stays open after the last observed
@@ -71,7 +71,22 @@ function workspaceRootForPath(absolutePath: string): string | undefined {
   return best;
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+/** Minimal test-only surface returned from `activate()` as extension
+ * exports -- the E2E suite (test/e2e) has no other way to observe
+ * in-memory engine state from outside the extension host, since
+ * `vscode.TextEditor.setDecorations` has no public getter. Not used by any
+ * production code path. */
+export interface TouristTestApi {
+  getAttributedRanges(docId: string): readonly AttributedRange[];
+  /** The same `WorkspaceAttributionProvider` instance passed to
+   * `vscode.window.createTreeView` below -- lets the E2E suite prove the
+   * Explorer view has a real, populated data provider (not VS Code's
+   * built-in "no data provider registered" fallback) without any public
+   * API to inspect a contributed view's registration from outside. */
+  getWorkspaceViewRootNodes(): readonly RollupNode[];
+}
+
+export function activate(context: vscode.ExtensionContext): TouristTestApi {
   let folderScopesSyncSnapshot: { path: string; key: RepoBranchKey }[] = [];
 
   const corroborationStore = new CorroborationStore();
@@ -484,6 +499,11 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   registerKnowledgeMapCommands(context);
+
+  return {
+    getAttributedRanges: (docId: string) => engine.getRanges(docId),
+    getWorkspaceViewRootNodes: () => workspaceView.getChildren(),
+  };
 }
 
 export function deactivate(): void {}

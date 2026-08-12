@@ -2,12 +2,12 @@
   "tech": [
     {
       "label": "Python",
-      "provenance": "ai",
+      "provenance": "confirmed",
       "proficiency": 2,
       "children": [
         {
           "label": "Core language fundamentals",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 2,
           "children": [],
           "latent": [],
@@ -15,23 +15,18 @@
             {
               "source": "git",
               "ref": "349b2b0e71da",
-              "detail": "Defines greet() and add() functions and a Calculator class using standard Python syntax"
+              "detail": "Defines simple functions (greet, add) using f-strings and basic arithmetic on sample.py"
             },
             {
               "source": "git",
               "ref": "685ba23f22e3",
-              "detail": "Adds power(), isprime(), print_table() using loops (range/for), modulo, exponentiation (**), and f-strings"
-            },
-            {
-              "source": "git",
-              "ref": "7cfda37f4869",
-              "detail": "Adds sub() and hello() functions using basic print() calls"
+              "detail": "Adds power(base, exponent) using ** operator and print_table(n) using a for-range loop with f-string formatting"
             }
           ]
         },
         {
           "label": "Object-Oriented Programming (classes)",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 2,
           "children": [],
           "latent": [],
@@ -39,40 +34,23 @@
             {
               "source": "git",
               "ref": "349b2b0e71da",
-              "detail": "Defines Calculator class with __init__ setting self.total and an add() method that mutates and returns instance state"
+              "detail": "Defines Calculator class with __init__ setting self.total and an add method mutating instance state"
             }
           ]
         }
       ],
-      "latent": [],
-      "evidence": [
-        {
-          "source": "git",
-          "ref": "349b2b0e71da",
-          "detail": "sample.py authored in Python with functions and a class"
-        },
-        {
-          "source": "git",
-          "ref": "685ba23f22e3",
-          "detail": "Continued Python development in same file"
-        },
-        {
-          "source": "git",
-          "ref": "7cfda37f4869",
-          "detail": "Continued Python development in same file"
-        }
-      ]
+      "latent": []
     }
   ],
   "cs": [
     {
       "label": "Algorithms & Complexity",
-      "provenance": "ai",
+      "provenance": "confirmed",
       "proficiency": 2,
       "children": [
         {
           "label": "Primality testing",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 2,
           "children": [],
           "latent": [],
@@ -85,78 +63,229 @@
           ]
         }
       ],
-      "latent": [],
-      "evidence": [
-        {
-          "source": "git",
-          "ref": "685ba23f22e3",
-          "detail": "isprime() bounds its divisor search at sqrt(n) and skips even divisors, showing awareness of reducing check count below linear scan"
-        }
-      ]
+      "latent": []
     }
   ],
   "practice": [
     {
       "label": "Code Quality & Craft",
-      "provenance": "ai",
-      "proficiency": 1,
+      "provenance": "confirmed",
+      "proficiency": 2,
       "children": [
         {
           "label": "PR / commit hygiene",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 1,
-          "children": [],
-          "latent": [],
+          "children": [
+            {
+              "label": "Commit message descriptiveness",
+              "provenance": "confirmed",
+              "proficiency": 1,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "685ba23f22e3",
+                  "detail": "Message \"xyz\" gives zero information about the actual changes: adding `from tkinter import Y`, a new power(base, exponent) function, rewriting add(x,y) to subtract, and restoring isprime()/print_table()"
+                },
+                {
+                  "source": "git",
+                  "ref": "7cfda37f4869",
+                  "detail": "Message \"do noting\" contradicts the diff, which deletes the isprime() and print_table() functions entirely and adds a new hello(x) function"
+                }
+              ]
+            },
+            {
+              "label": "Commit scope & atomicity",
+              "provenance": "confirmed",
+              "proficiency": 3,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "685ba23f22e3",
+                  "detail": "Single commit \"xyz\" bundles 5 unrelated concerns in one diff: unused import add (`from tkinter import Y`), new power() function, a behavior change to add() (a+b -> a-b), and re-adding isprime() and print_table() — none related to each other or explained"
+                }
+              ]
+            },
+            {
+              "label": "Message-diff alignment",
+              "provenance": "confirmed",
+              "proficiency": 4,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "7cfda37f4869",
+                  "detail": "Commit titled \"do noting\" actually: (1) fixes add() back to `x + y`, (2) deletes the entire isprime() function (10 lines), (3) adds a new hello(x) function containing stray leftover text \"cdxsfcm\" after the print call, and (4) deletes print_table() — a message implying a no-op paired with substantial, unrelated functional changes"
+                }
+              ]
+            }
+          ],
+          "latent": [
+            {
+              "label": "PR description / review-request quality",
+              "provenance": "ai",
+              "proficiency": 0,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "349b2b0e71da",
+                  "detail": "Evidence bundle only contains raw commit diffs (no PR title/description/reviewer metadata across any of the 3 commits), so PR-level hygiene beyond the commit messages themselves can't yet be assessed from this bundle"
+                }
+              ]
+            }
+          ],
           "evidence": [
             {
               "source": "git",
-              "ref": "7cfda37f4869",
-              "detail": "Commit message is 'do noting' — non-descriptive of the actual change"
+              "ref": "685ba23f22e3",
+              "detail": "Commit message is just \"xyz\" — non-descriptive, gives no indication of the actual change (add power/isprime/print_table, break add())"
             },
             {
               "source": "git",
-              "ref": "685ba23f22e3",
-              "detail": "Commit message is 'xyz' — non-descriptive of the actual change"
+              "ref": "7cfda37f4869",
+              "detail": "Commit message is \"do noting\" (typo for 'nothing') despite removing isprime/print_table and fixing add() — misleading/uninformative message"
             }
           ]
         },
         {
           "label": "Code churn / rework",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 1,
-          "children": [],
+          "children": [
+            {
+              "label": "Function churn (added & removed within 2 commits)",
+              "provenance": "confirmed",
+              "proficiency": 1,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "685ba23f22e3",
+                  "detail": "isprime(n) and print_table(n) added"
+                },
+                {
+                  "source": "git",
+                  "ref": "7cfda37f4869",
+                  "detail": "isprime(n) and print_table(n) both deleted one commit later with no explanation in the message (\"do noting\")"
+                }
+              ]
+            }
+          ],
           "latent": [],
           "evidence": [
             {
               "source": "git",
               "ref": "685ba23f22e3",
-              "detail": "Changes add(a,b) returning a+b into add(x,y) returning x-y, despite the function name implying addition"
+              "detail": "isprime() and print_table() added"
             },
             {
               "source": "git",
               "ref": "7cfda37f4869",
-              "detail": "Reverts add() back to x+y, then removes the just-added isprime() and print_table() functions again while inserting an incomplete sub() definition"
+              "detail": "isprime() and print_table() both deleted again one commit later, and add()'s logic is flipped (x - y) then reverted (x + y) across these two commits — same lines rewritten back and forth rather than converging"
+            }
+          ]
+        },
+        {
+          "label": "Dead code & cleanliness",
+          "provenance": "confirmed",
+          "proficiency": 1,
+          "children": [
+            {
+              "label": "Unused imports",
+              "provenance": "confirmed",
+              "proficiency": 1,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "685ba23f22e3",
+                  "detail": "`from tkinter import Y` is added but `Y` is never used anywhere in sample.py in any of the 3 commits"
+                }
+              ]
+            },
+            {
+              "label": "Leftover debug/garbage artifacts",
+              "provenance": "confirmed",
+              "proficiency": 2,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "7cfda37f4869",
+                  "detail": "hello(x) function committed with trailing garbage text \"cdxsfcm\" directly after the print(x) call, indicating uncommitted/uncleaned edits made it into the commit"
+                }
+              ]
+            }
+          ],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "Adds \"from tkinter import Y\" which is never referenced anywhere in the file — unused import left in"
+            },
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "hello(x) function body committed as \"print(x) cdxsfcm\" — stray debris/typo text left in committed code"
+            }
+          ]
+        },
+        {
+          "label": "Bug/defect patterns",
+          "provenance": "confirmed",
+          "proficiency": 1,
+          "children": [
+            {
+              "label": "Silent logic regression (add() sign flip)",
+              "provenance": "confirmed",
+              "proficiency": 1,
+              "children": [],
+              "latent": [],
+              "evidence": [
+                {
+                  "source": "git",
+                  "ref": "685ba23f22e3",
+                  "detail": "add() changed from addition to subtraction without test coverage or comment catching the semantic change"
+                }
+              ]
+            }
+          ],
+          "latent": [],
+          "evidence": [
+            {
+              "source": "git",
+              "ref": "685ba23f22e3",
+              "detail": "add(x, y) changed to \"return x - y\" — introduces a correctness regression in a function literally named add"
+            },
+            {
+              "source": "git",
+              "ref": "7cfda37f4869",
+              "detail": "add(x, y) changed back to \"return x + y\", fixing the regression introduced in the immediately preceding commit"
             }
           ]
         }
       ],
-      "latent": [],
-      "evidence": [
-        {
-          "source": "git",
-          "ref": "7cfda37f4869",
-          "detail": "Commit titled 'do noting' leaves sample.py with a bodyless sub() function directly followed by a syntax-invalid line ('print(x) cdxsfcm') inside hello()"
-        }
-      ]
+      "latent": []
     },
     {
       "label": "Testing Discipline",
-      "provenance": "ai",
+      "provenance": "confirmed",
       "proficiency": 1,
       "children": [
         {
           "label": "Pre-commit verification",
-          "provenance": "ai",
+          "provenance": "confirmed",
           "proficiency": 1,
           "children": [],
           "latent": [],

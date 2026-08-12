@@ -142,7 +142,9 @@
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pretest:e2e": "node esbuild.js && node esbuild.e2e.js",
+    "test:e2e": "node dist-test/runTest.js"
   },
   "dependencies": {
     "ignore": "^5.3.2",
@@ -150,10 +152,13 @@
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.10.2",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.24.2",
     "jsdom": "^30.0.1",
+    "mocha": "^11.8.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

@@ -22,6 +22,7 @@ import { CorroborationStore } from "../../src/core/corroboration-store.ts";
 import { RealPersistenceAdapter } from "../../src/vscode-integration/persistence-adapter.ts";
 import { reconcileAfterGitChange, type OpenDocSnapshot } from "../../src/vscode-integration/git-reload.ts";
 import type { RepoBranchKey } from "../../src/vscode-integration/contracts.ts";
+import { computeStats, percentagesOf } from "../../src/vscode-integration/stats.ts";
 
 function git(cwd: string, args: string[]): string {
   return execFileSync(
@@ -170,6 +171,89 @@ describe("branch-switch / stash-pop attribution round trip (real git repo)", () 
     await reconcile(afterPop);
     expect(originsOf(engine, docId).some(([origin]) => origin === "human")).toBe(true);
     expect(originsOf(engine, docId).some(([origin]) => origin === "ai")).toBe(true);
+  });
+
+  it("does not worsen with repetition: a realistic same-line human/ai mix stays stable across two stash push+pop cycles (tourist-21)", async () => {
+    // Two lines each mixing human-typed and ai-completed text *on the same
+    // line* -- routine for a live per-keystroke engine (a human tweaking a
+    // couple of characters inside an otherwise AI-written line), not a
+    // contrived edge case. Human is the character-majority on both lines.
+    const line1 = "const x = humanPart + aiPart1;\n"; // human: "const x = humanPart" (19), ai: rest (13)
+    const line2 = "const y = moreHuman + aiPart2;\n"; // human: "const y = moreHuman" (19), ai: rest (13)
+    const line3 = "done();\n";
+    const original = line1 + line2 + line3;
+    await writeFile(docId, original);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "initial"]);
+
+    const h1End = "const x = humanPart".length;
+    const a1End = line1.length;
+    const h2Start = a1End;
+    const h2End = a1End + "const y = moreHuman".length;
+    const a2End = a1End + line2.length;
+    const now = Date.now();
+    engine.open(docId, original, [
+      { startOffset: 0, endOffset: h1End, origin: "human", tier: null, timestamp: now - 10000 },
+      { startOffset: h1End, endOffset: a1End, origin: "ai", tier: "2a", timestamp: now - 10000 },
+      { startOffset: h2Start, endOffset: h2End, origin: "human", tier: null, timestamp: now - 9000 },
+      { startOffset: h2End, endOffset: a2End, origin: "ai", tier: "2a", timestamp: now - 9000 },
+      { startOffset: a2End, endOffset: original.length, origin: "human", tier: null, timestamp: now - 8000 },
+    ]);
+    await persistDoc(docId, original);
+
+    // A human edit, dirty on disk, that will be stashed and popped repeatedly
+    // (mirrors the live report: one already-attributed, still-open file,
+    // round-tripped through `git stash` more than once).
+    const edited = original + "// human comment\n";
+    await writeFile(docId, edited);
+    engine.pushChanges({
+      docId,
+      changes: [{ rangeOffset: original.length, rangeLength: 0, text: "// human comment\n" }],
+      dirtyBefore: true,
+      dirtyAfter: false,
+      reason: "typed",
+      timestamp: Date.now(),
+    });
+    await persistDoc(docId, edited);
+
+    // The persisted schema is whole-line only (v1's locked scope), so a
+    // same-line human/ai mix necessarily collapses to one origin per line on
+    // any save/reload round trip -- that collapse itself isn't the bug.
+    // Character-majority-per-line is the one deterministic, well-defined
+    // choice for which origin a whole line collapses to; human is the
+    // majority on both mixed lines here, so the correct, *stable* collapsed
+    // result is 100% human, 0% ai for the original+edited content.
+    const cyclePercentages: ReturnType<typeof percentagesOf>[] = [];
+    for (let cycle = 0; cycle < 2; cycle++) {
+      git(repoDir, ["stash", "push", "-q"]);
+      const afterPush = await readFile(docId, "utf8");
+      expect(afterPush).toBe(original);
+      await reconcile(afterPush);
+      await persistDoc(docId, afterPush);
+
+      git(repoDir, ["stash", "pop", "-q"]);
+      const afterPop = await readFile(docId, "utf8");
+      expect(afterPop).toBe(edited);
+      await reconcile(afterPop);
+      await persistDoc(docId, afterPop);
+
+      const stats = computeStats(engine.getRanges(docId));
+      cyclePercentages.push(percentagesOf(stats));
+    }
+
+    // First cycle: no impossible/negative percentages, and the majority
+    // (human) origin correctly wins the whole-line collapse.
+    expect(cyclePercentages[0]).toEqual({ aiPct: 0, humanPct: 100, externalPct: 0 });
+    // Second cycle: this is the assertion that catches the real bug -- with
+    // the pre-fix code, each save independently hashed the *entire* line's
+    // text for every sub-line range sharing it, so a human range and an ai
+    // range on the same line produced identical `contentHash`es and
+    // `upsertByContentHash` (store.ts) silently let whichever range was last
+    // in save order clobber the other, non-deterministically, rather than
+    // resolving to a stable winner -- so repeating the exact same stash
+    // cycle could (and did, live) keep flipping/degrading the result instead
+    // of settling.
+    expect(cyclePercentages[1]).toEqual(cyclePercentages[0]);
   });
 });
 
