@@ -3,18 +3,13 @@
  * `vscode` import -- pure enough to unit test without an extension host.
  *
  * The flag set below (`--claude-backend`/`--claude-cli-path`/`--model`/
- * `--deep-dive`) is the *planned* interface two sibling workers are adding
- * to ideation/knowledge-forest/analyser/src/cli.ts in parallel (the Claude
- * CLI/api-key backend work, and tourist-15's `--deep-dive` topic-scoped
- * analysis flag). As of this writing neither has landed -- cli.ts only
- * parses --repo/--since/--out/--forest(comma-separated kinds)/--include-prompts/
- * --dry-run/--max-commits/--max-chars, and its `--forest` flag means
- * something different (forest *kinds*, not an output path) from the
- * `--forest <path>` used here. Per instructions, this deliberately does not
- * guess a different/compatible interface -- it's wired to the real, planned
- * one, and `looksLikeUnsupportedFlags` lets callers detect + report
- * "waiting on the sibling worker" instead of crashing confusingly when the
- * CLI rejects an argument it doesn't parse yet.
+ * `--deep-dive`) matches ideation/knowledge-forest/analyser/src/cli.ts's
+ * real, landed interface. Note `--out` (not `--forest`) is the output-path
+ * flag -- cli.ts's own `--forest` takes a comma-separated list of forest
+ * *kinds* (tech/cs/practice), a different thing entirely; passing a JSON
+ * path there silently filters down to zero kinds instead of erroring.
+ * `looksLikeUnsupportedFlags` stays as a defensive check for a stale local
+ * analyser build (built before a future flag change) rather than a crash.
  */
 import { spawn } from "node:child_process";
 
@@ -34,7 +29,7 @@ export function buildAnalyserArgs(opts: GenerateOptions): string[] {
   const args = [
     "--repo",
     opts.repoRoot,
-    "--forest",
+    "--out",
     opts.forestJsonPath,
     "--claude-backend",
     opts.claudeBackend,
@@ -44,7 +39,6 @@ export function buildAnalyserArgs(opts: GenerateOptions): string[] {
     opts.model,
   ];
   if (opts.deepDiveTopics && opts.deepDiveTopics.length > 0) {
-    // TODO(tourist-15): analyser/src/cli.ts doesn't parse --deep-dive yet.
     args.push("--deep-dive", opts.deepDiveTopics.join(","));
   }
   return args;

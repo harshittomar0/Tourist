@@ -7,7 +7,7 @@
  * hand-syncing it here is cheaper than coupling this extension's compile to
  * a sibling package's TypeScript sources.
  */
-export type Provenance = "confirmed" | "ai" | "gap";
+export type Provenance = "confirmed" | "ai" | "gap" | "tracked";
 export type ForestKind = "tech" | "cs" | "practice";
 
 export interface ForestEvidence {

@@ -112,11 +112,8 @@ export async function runGenerateKnowledgeMap(context: vscode.ExtensionContext, 
   }
 
   if (looksLikeUnsupportedFlags(stderr)) {
-    const pendingFlags = opts.deepDiveTopics?.length
-      ? "--deep-dive (tourist-15's work, in progress in a parallel change)"
-      : "--claude-backend/--claude-cli-path/--model (in progress in a parallel change)";
     vscode.window.showWarningMessage(
-      `Tourist: this run is wired to the analyser CLI's planned interface but is waiting on ${pendingFlags}. Nothing was sent.`
+      `Tourist: the built analyser CLI at ${paths.cliJsPath} doesn't recognize one of the flags this extension passes it. Try "npm install && npm run build" inside ideation/knowledge-forest/analyser to pick up the latest CLI. Nothing was sent.`
     );
     return;
   }

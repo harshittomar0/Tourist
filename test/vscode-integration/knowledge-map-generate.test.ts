@@ -13,7 +13,7 @@ describe("buildAnalyserArgs", () => {
     expect(args).toEqual([
       "--repo",
       "/repo",
-      "--forest",
+      "--out",
       "/repo/ideation/knowledge-forest/data/forest.json",
       "--claude-backend",
       "cli",
