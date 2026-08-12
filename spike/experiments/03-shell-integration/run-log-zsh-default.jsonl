@@ -1,0 +1,12 @@
+{"t":1786526574695,"type":"activate","vscodeVersion":"1.132.1","workspaceFolders":["/tmp/tourist-spike-exp3-repo"]}
+{"t":1786526574696,"type":"exp6-initial-repositories","repositories":[]}
+{"t":1786526574696,"type":"exp3-start"}
+{"t":1786526574697,"type":"exp3-terminal-created","name":"exp3-default","shell":"(default)"}
+{"t":1786526576207,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"exp3-default","hasShellIntegration":true}
+{"t":1786526576247,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"exp3-default","hasShellIntegration":true}
+{"t":1786526576649,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"zsh","hasShellIntegration":true}
+{"t":1786526576672,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"zsh","hasShellIntegration":true}
+{"t":1786526577198,"type":"exp3-sending-command","command":"claude --version"}
+{"t":1786526577223,"type":"exp3-onDidStartTerminalShellExecution","terminalName":"exp3-default","commandLineValue":"claude --version","commandLineConfidence":2,"commandLineIsTrusted":true,"cwd":"/tmp/tourist-spike-exp3-repo"}
+{"t":1786526577324,"type":"exp3-onDidEndTerminalShellExecution","terminalName":"exp3-default","exitCode":0}
+{"t":1786526581200,"type":"exp3-done"}

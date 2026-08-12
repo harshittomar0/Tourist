@@ -1,0 +1,65 @@
+git version under test: git version 2.50.1 (Apple Git-155)
+
+=== 8a. commit --amend with NO rewrite config -- expect silent orphan ===
+before amend: note on 6fee861a48a3efd18af365050a6e174a06eb32be = {"origin":"ai"}
+old sha 6fee861a48a3efd18af365050a6e174a06eb32be -> new sha 2812225a43a76ab7c6821cd9a112eea18cef12d2
+error: no note found for object 2812225a43a76ab7c6821cd9a112eea18cef12d2.
+{"origin":"ai"}
+note on NEW sha present? rc=1 (0=yes,1=no)
+note on OLD sha still present (now unreachable)? rc=0 (0=yes,1=no)
+is old sha still an ancestor of HEAD? rc=1 (0=yes/reachable, 1=no/orphaned)
+
+=== 8b. commit --amend WITH notes.rewriteRef + notes.rewrite.amend true -- expect auto-copy ===
+old sha 6fee861a48a3efd18af365050a6e174a06eb32be -> new sha 2812225a43a76ab7c6821cd9a112eea18cef12d2
+{"origin":"ai"}
+note on NEW sha rc=0
+
+=== 8c. rebase (multi-commit) WITH notes.rewriteRef + notes.rewrite.rebase true -- expect auto-copy for all commits ===
+post-rebase feature log:
+61074ea feat2
+8fb2cb1 feat1
+commit 61074ea87d08335b37b86828b677bd1190263285 note(rc=0): {"c":"feat2"}
+commit 8fb2cb1c4065d7f8dd8d92751d99fcf014f7fb25 note(rc=0): {"c":"feat1"}
+
+=== 8d. interactive-rebase SQUASH of two noted commits -- expect N:1, both old SHAs -> one new SHA ===
+[detached HEAD a1f9ec2] c1
+ Date: Wed Aug 12 14:17:52 2026 +0530
+ 1 file changed, 2 insertions(+)
+squashed sha: a1f9ec28e7456be95e0bea370b49fa6cb284bf04
+{"c":"c1"}
+
+{"c":"c2"}
+note on squashed sha rc=0
+post-rewrite.log contents:
+post-rewrite fired: class=amend
+907860c694cdca713f09fd04f05f6d21e01e2f73 a1f9ec28e7456be95e0bea370b49fa6cb284bf04
+post-rewrite fired: class=rebase
+907860c694cdca713f09fd04f05f6d21e01e2f73 a1f9ec28e7456be95e0bea370b49fa6cb284bf04
+4e12d60496969366ee4bb4548a6f2c90e560ca4f a1f9ec28e7456be95e0bea370b49fa6cb284bf04
+
+=== 8e. cherry-pick WITHOUT -x -- expect note lost, NO hook fires at all, no signal ===
+[main f1cf73e] c1
+ Date: Wed Aug 12 14:17:53 2026 +0530
+ 1 file changed, 1 insertion(+)
+cherry-picked (no -x) sha: f1cf73eef8a8cb54ab4dad34a55f85f06165611e (source was ebbae188cfb4391451e269e770658282867791f2) -- must differ from source to be a valid test
+error: no note found for object f1cf73eef8a8cb54ab4dad34a55f85f06165611e.
+note on cherry-picked sha rc=1
+post-rewrite.log contents (expect NOT present / empty -- hook should not fire for cherry-pick):
+(none -- confirms no hook signal)
+
+=== 8f. cherry-pick WITH -x -- expect trailer present, still no rewrite-hook signal, but recoverable via message scan ===
+[main 4e5863d] c1
+ Date: Wed Aug 12 14:17:54 2026 +0530
+ 1 file changed, 1 insertion(+)
+cherry-picked (WITH -x) sha: 4e5863d4ff68cf902ffd15b095e674179741d5db (source was 3990f4c27dc590bb09bd0a5445072c90179b63ac) -- must differ from source to be a valid test
+new commit message:
+c1
+
+(cherry picked from commit 3990f4c27dc590bb09bd0a5445072c90179b63ac)
+
+error: no note found for object 4e5863d4ff68cf902ffd15b095e674179741d5db.
+note on cherry-picked sha rc=1 (expect 1 -- notes.rewrite.cherry-pick does NOT exist/apply, confirming even with the config set there's no built-in copy path)
+post-rewrite.log contents (expect NOT present -- confirms hook truly never fires for cherry-pick, -x or not):
+(none)
+
+=== ALL 8x SUB-EXPERIMENTS DONE ===

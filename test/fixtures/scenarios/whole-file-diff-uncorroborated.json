@@ -1,0 +1,12 @@
+{
+  "name": "whole-file-diff-uncorroborated",
+  "description": "A tracked-but-never-opened file changes on disk with no corroboration signal active -- classified external/3 via the whole-file-diff path, never silently ai.",
+  "ref": "PLAN1.md Phase 1 exit criteria -- whole-file-diff path, tier-2/tier-3 classification",
+  "workspaceId": "ws1",
+  "steps": [
+    {
+      "kind": "ingestWholeFileDiff",
+      "input": { "docId": "closed-file.ts", "previousContent": "line1\nline2\n", "newContent": "line1\nline2\nline3\n", "timestamp": 1 }
+    }
+  ]
+}

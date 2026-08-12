@@ -1,0 +1,12 @@
+{"t":1786526658134,"type":"activate","vscodeVersion":"1.132.1","workspaceFolders":["/tmp/tourist-spike-exp3-repo"]}
+{"t":1786526658135,"type":"exp6-initial-repositories","repositories":[]}
+{"t":1786526658136,"type":"exp3-start"}
+{"t":1786526658136,"type":"exp3-terminal-created","name":"exp3-/bin/sh","shell":"/bin/sh"}
+{"t":1786526660637,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"zsh","hasShellIntegration":true}
+{"t":1786526660638,"type":"exp3-shellIntegration-property-check","hasShellIntegration":false}
+{"t":1786526660638,"type":"exp3-sending-command","command":"claude --version"}
+{"t":1786526660659,"type":"exp3-onDidChangeTerminalShellIntegration","terminalName":"zsh","hasShellIntegration":true}
+{"t":1786526663989,"type":"exp3-onDidStartTerminalShellExecution","terminalName":"zsh","commandLineValue":"","commandLineConfidence":1,"cwd":"/tmp/tourist-spike-exp3-repo"}
+{"t":1786526663994,"type":"exp3-onDidEndTerminalShellExecution","terminalName":"zsh"}
+{"t":1786526664639,"type":"exp3-shellIntegration-property-check-after","hasShellIntegration":false}
+{"t":1786526664640,"type":"exp3-done"}

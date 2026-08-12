@@ -1,0 +1,21 @@
+{
+  "name": "tourist-spike",
+  "displayName": "Tourist Phase 0 Spike (throwaway)",
+  "description": "Disposable instrumentation/logging harness for PLAN1.md Phase 0. Not part of the shipped extension's dependency graph. Frozen once Phase 1 begins; deleted at Phase 5.",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "touristSpike.dumpLog",
+        "title": "Tourist Spike: Dump Log Path"
+      }
+    ]
+  }
+}

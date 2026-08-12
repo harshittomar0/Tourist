@@ -1,0 +1,32 @@
+{
+  "name": "non-whitespace-reattached",
+  "description": "AI writes a line while clean (ai/2a), then a human inserts real (non-whitespace) text mid-line, dirty before/after -- unlike the pure-whitespace case, this IS reattributed: the touched range splits into ai + human, not passed through as ai.",
+  "ref": "PLAN1.md Phase 1 exit criteria -- edge case: non-whitespace insert is NOT passed through",
+  "workspaceId": "ws1",
+  "steps": [
+    { "kind": "setCorroborationSignal", "workspaceId": "ws1", "source": "lock-file", "active": true, "since": 0 },
+    { "kind": "open", "docId": "doc1", "content": "" },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 0, "rangeLength": 0, "text": "const x = 1;" }],
+        "dirtyBefore": false,
+        "dirtyAfter": false,
+        "reason": "typed",
+        "timestamp": 1
+      }
+    },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 5, "rangeLength": 0, "text": "REAL_CODE" }],
+        "dirtyBefore": true,
+        "dirtyAfter": true,
+        "reason": "typed",
+        "timestamp": 2
+      }
+    }
+  ]
+}

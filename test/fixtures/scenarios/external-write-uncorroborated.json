@@ -1,0 +1,20 @@
+{
+  "name": "external-write-uncorroborated",
+  "description": "A disk write while clean, with no corroboration signal active, is external/3 -- never silently defaulted to ai.",
+  "ref": "PLAN1.md Phase 1 exit criteria -- tier transition coverage; RESEARCH1.md 'external/unknown, not defaulted to ai' philosophy",
+  "workspaceId": "ws1",
+  "steps": [
+    { "kind": "open", "docId": "doc1", "content": "" },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 0, "rangeLength": 0, "text": "formatted" }],
+        "dirtyBefore": false,
+        "dirtyAfter": false,
+        "reason": "typed",
+        "timestamp": 1
+      }
+    }
+  ]
+}

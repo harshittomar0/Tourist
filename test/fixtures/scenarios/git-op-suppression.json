@@ -1,0 +1,22 @@
+{
+  "name": "git-op-suppression",
+  "description": "While a workspace's git-op suppression window is active, a would-be-ai disk write (clean before/after, corroborated) lands as unmarked (null/null), not ai or external -- checkouts/rebases must not be misattributed as authored edits.",
+  "ref": "PLAN1.md 'bulk background-change bursts' row (large-repo/workspace-wide watcher risk)",
+  "workspaceId": "ws1",
+  "steps": [
+    { "kind": "setCorroborationSignal", "workspaceId": "ws1", "source": "lock-file", "active": true, "since": 0 },
+    { "kind": "setGitOpSuppression", "workspaceId": "ws1", "suppressed": true },
+    { "kind": "open", "docId": "doc1", "content": "" },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 0, "rangeLength": 0, "text": "checked out content" }],
+        "dirtyBefore": false,
+        "dirtyAfter": false,
+        "reason": "typed",
+        "timestamp": 1
+      }
+    }
+  ]
+}

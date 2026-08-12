@@ -1,0 +1,42 @@
+{"t":1786524988511,"type":"activate","vscodeVersion":"1.132.1","workspaceFolders":["/tmp/tourist-spike-exp6-repo"]}
+{"t":1786524988512,"type":"exp6-initial-repositories","repositories":[]}
+{"t":1786524988561,"type":"exp6-onDidOpenRepository","root":"/tmp/tourist-spike-exp6-repo","head":null}
+{"t":1786524988561,"type":"exp6-repo-wired","root":"/tmp/tourist-spike-exp6-repo","head":null}
+{"t":1786524988587,"type":"isDirtyPollTransition","uri":"vscode-scm:git/scm0/input?rootUri%3Dfile%253A%252F%252F%252Ftmp%252Ftourist-spike-exp6-repo","from":null,"to":false}
+{"t":1786524988613,"type":"exp6-state-change","source":"repo.state.onDidChange","root":"/tmp/tourist-spike-exp6-repo","headBefore":null,"headAfter":"main","branchActuallyChanged":true}
+{"t":1786524988652,"type":"exp6-state-change","source":"repo.state.onDidChange","root":"/tmp/tourist-spike-exp6-repo","headBefore":"main","headAfter":"main","branchActuallyChanged":false}
+{"t":1786524990014,"type":"exp6-autotest-start"}
+{"t":1786524990015,"type":"exp6-autotest-issuing-checkout","cwd":"/tmp/tourist-spike-exp6-repo","target":"spike-branch-a","command":"git checkout -b spike-branch-a"}
+{"t":1786524990054,"type":"exp6-autotest-checkout-issued","issuedAt":1786524990016}
+{"t":1786524991201,"type":"exp6-state-change","source":"repo.state.onDidChange","root":"/tmp/tourist-spike-exp6-repo","headBefore":"main","headAfter":"spike-branch-a","branchActuallyChanged":true}
+{"t":1786524991559,"type":"isDirtyPollTransition","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","from":null,"to":false}
+{"t":1786524991786,"type":"isDirtyPollTransition","uri":"git:/tmp/tourist-spike-exp6-repo/f.txt.git?%7B%22path%22%3A%22%2Ftmp%2Ftourist-spike-exp6-repo%2Ff.txt%22%2C%22ref%22%3A%22%22%7D","from":null,"to":false}
+{"t":1786524992953,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":false,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":6,"rangeLength":0,"textLength":1}]}
+{"t":1786524992955,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":0,"ranges":[]}
+{"t":1786524992965,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":7,"rangeLength":0,"textLength":1}]}
+{"t":1786524993170,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":8,"rangeLength":0,"textLength":1}]}
+{"t":1786524993298,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":9,"rangeLength":0,"textLength":1}]}
+{"t":1786524994057,"type":"exp6-autotest-issuing-commit-on-branch","cwd":"/tmp/tourist-spike-exp6-repo","command":"echo change >> f.txt && git commit -am change"}
+{"t":1786524994122,"type":"exp6-autotest-commit-issued","issuedAt":1786524994058}
+{"t":1786524994230,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":10,"rangeLength":0,"textLength":1}]}
+{"t":1786524994677,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":11,"rangeLength":0,"textLength":1}]}
+{"t":1786524994683,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":12,"rangeLength":0,"textLength":1}]}
+{"t":1786524994844,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":13,"rangeLength":0,"textLength":1}]}
+{"t":1786524995016,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":14,"rangeLength":0,"textLength":1}]}
+{"t":1786524995074,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":15,"rangeLength":0,"textLength":1}]}
+{"t":1786524995112,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":16,"rangeLength":0,"textLength":1}]}
+{"t":1786524995423,"type":"onDidChangeTextDocument","uri":"git:/tmp/tourist-spike-exp6-repo/f.txt.git?%7B%22path%22%3A%22%2Ftmp%2Ftourist-spike-exp6-repo%2Ff.txt%22%2C%22ref%22%3A%22%22%7D","isDirty":false,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":6,"rangeLength":0,"textLength":7}]}
+{"t":1786524995827,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":true,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":17,"rangeLength":0,"textLength":1}]}
+{"t":1786524996400,"type":"exp6-state-change","source":"repo.state.onDidChange","root":"/tmp/tourist-spike-exp6-repo","headBefore":"spike-branch-a","headAfter":"spike-branch-a","branchActuallyChanged":false}
+{"t":1786524998124,"type":"exp6-autotest-issuing-checkout","cwd":"/tmp/tourist-spike-exp6-repo","target":"main","command":"git checkout main"}
+{"t":1786524998165,"type":"exp6-autotest-checkout-issued","issuedAt":1786524998125}
+{"t":1786524999411,"type":"onDidChangeTextDocument","uri":"git:/tmp/tourist-spike-exp6-repo/f.txt.git?%7B%22path%22%3A%22%2Ftmp%2Ftourist-spike-exp6-repo%2Ff.txt%22%2C%22ref%22%3A%22%22%7D","isDirty":false,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":6,"rangeLength":7,"textLength":0}]}
+{"t":1786525001452,"type":"exp6-state-change","source":"repo.state.onDidChange","root":"/tmp/tourist-spike-exp6-repo","headBefore":"spike-branch-a","headAfter":"main","branchActuallyChanged":true}
+{"t":1786525002167,"type":"exp6-autotest-issuing-rebase","cwd":"/tmp/tourist-spike-exp6-repo","command":"git rebase -q spike-branch-a"}
+{"t":1786525002215,"type":"exp6-autotest-rebase-issued","issuedAt":1786525002169}
+{"t":1786525003465,"type":"onDidChangeTextDocument","uri":"git:/tmp/tourist-spike-exp6-repo/f.txt.git?%7B%22path%22%3A%22%2Ftmp%2Ftourist-spike-exp6-repo%2Ff.txt%22%2C%22ref%22%3A%22%22%7D","isDirty":false,"reason":null,"changeCount":1,"ranges":[{"rangeOffset":6,"rangeLength":0,"textLength":7}]}
+{"t":1786525003855,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":false,"reason":null,"changeCount":0,"ranges":[]}
+{"t":1786525003856,"type":"onDidChangeTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":false,"reason":null,"changeCount":0,"ranges":[]}
+{"t":1786525003856,"type":"onDidSaveTextDocument","uri":"file:///tmp/tourist-spike-exp6-repo/f.txt","isDirty":false}
+{"t":1786525006217,"type":"exp6-autotest-done"}
+{"t":1786525006731,"type":"exp6-onDidCloseRepository","root":"/tmp/tourist-spike-exp6-repo"}

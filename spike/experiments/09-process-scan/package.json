@@ -1,0 +1,9 @@
+{
+  "name": "tourist-spike-exp9-process-scan",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway script for PLAN1.md Phase 0 experiment 9 -- not part of the shipped extension's dependency graph.",
+  "dependencies": {
+    "ps-list": "^8.1.1"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "human-edit-basic",
+  "description": "A human keystroke (dirty before and after) is attributed human/no-tier.",
+  "ref": "PLAN1.md Phase 1 exit criteria -- tier transition coverage",
+  "workspaceId": "ws1",
+  "steps": [
+    { "kind": "open", "docId": "doc1", "content": "" },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 0, "rangeLength": 0, "text": "hello" }],
+        "dirtyBefore": true,
+        "dirtyAfter": true,
+        "reason": "typed",
+        "timestamp": 1
+      }
+    }
+  ]
+}

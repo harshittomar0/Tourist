@@ -1,0 +1,5 @@
+{"t":1786525055977,"type":"activate","vscodeVersion":"1.132.1","workspaceFolders":["/tmp/tourist-spike-exp6-notrepo"]}
+{"t":1786525055978,"type":"exp6-initial-repositories","repositories":[]}
+{"t":1786525075606,"type":"isDirtyPollTransition","uri":"file:///tmp/tourist-spike-exp6-notrepo/plain.txt","from":null,"to":false}
+{"t":1786525075759,"type":"isDirtyPollTransition","uri":"file:///private/tmp/tourist-spike-exp6-notrepo/plain.txt","from":null,"to":false}
+{"t":1786525075910,"type":"isDirtyPollTransition","uri":"_claude_vscode_fs_right:/private/tmp/tourist-spike-exp6-notrepo/plain.txt","from":null,"to":false}

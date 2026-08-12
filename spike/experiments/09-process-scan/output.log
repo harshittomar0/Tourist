@@ -1,0 +1,414 @@
+platform: darwin
+total processes seen by ps-list: 618
+processes matching /claude/i by name or cmd: 39
+{
+  "pid": 7563,
+  "name": "claude",
+  "cmd": "claude --resume b94e8305-1e2f-44e6-9f36-8fbe5287ee20",
+  "ppid": 42230,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.6
+}
+{
+  "pid": 11299,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/tourist/tourist-4' || exit; unset NO_COLOR; e...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 11301,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 11299,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 11304,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id 495838f1-9e7d-5868-b6aa-ce6f8d9125d3 --append-sys...[truncated]",
+  "ppid": 11301,
+  "uid": 503,
+  "cpu": 1.1,
+  "memory": 1.3
+}
+{
+  "pid": 15942,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/tourist/tourist-5' || exit; unset NO_COLOR; e...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 15944,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 15942,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 15947,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id 3cf01049-d2db-5f2b-bff1-b7db0301152e --append-sys...[truncated]",
+  "ppid": 15944,
+  "uid": 503,
+  "cpu": 20.1,
+  "memory": 1.2
+}
+{
+  "pid": 36157,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.vscode/extensions/anthropic.claude-code-2.1.228-darwin-arm64/resources/native-b...[truncated]",
+  "ppid": 35706,
+  "uid": 503,
+  "cpu": 1.1,
+  "memory": 0.9
+}
+{
+  "pid": 36990,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c source /Users/harshittomar/.claude/shell-snapshots/snapshot-zsh-1786524077472-61eie3.sh ...[truncated]",
+  "ppid": 15947,
+  "uid": 503,
+  "cpu": 0.3,
+  "memory": 0
+}
+{
+  "pid": 36995,
+  "name": "bash",
+  "cmd": "/bin/bash /tmp/tourist-spike-exp9-fakews.OjYfXj/claude 20",
+  "ppid": 36990,
+  "uid": 503,
+  "cpu": 0.1,
+  "memory": 0
+}
+{
+  "pid": 71651,
+  "name": "Claude",
+  "cmd": "/Applications/Claude.app/Contents/MacOS/Claude",
+  "ppid": 1,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.6
+}
+{
+  "pid": 71656,
+  "name": "chrome_crashpad_handler",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_ha...[truncated]",
+  "ppid": 1,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 71657,
+  "name": "Claude Helper",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=g...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.2
+}
+{
+  "pid": 71659,
+  "name": "Claude Helper",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=u...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.1
+}
+{
+  "pid": 71666,
+  "name": "Claude Helper (Renderer)",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Help...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.2
+}
+{
+  "pid": 71692,
+  "name": "Claude Helper (Renderer)",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Help...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.8
+}
+{
+  "pid": 72077,
+  "name": "disclaimer",
+  "cmd": "/Applications/Claude.app/Contents/Helpers/disclaimer /Users/harshittomar/.nvm/versions/node/v22.14.0...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 72078,
+  "name": "disclaimer",
+  "cmd": "/Applications/Claude.app/Contents/Helpers/disclaimer /Users/harshittomar/.nvm/versions/node/v22.14.0...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 72100,
+  "name": "Claude Helper",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=u...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.1
+}
+{
+  "pid": 72101,
+  "name": "Claude Helper",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=u...[truncated]",
+  "ppid": 71651,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.1
+}
+{
+  "pid": 72149,
+  "name": "ShipIt",
+  "cmd": "/Applications/Claude.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt com.anthropic.claud...[truncated]",
+  "ppid": 1,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 74251,
+  "name": "tmux",
+  "cmd": "tmux new-session -d -s scratch-1 -x 220 -y 50 -c /Users/harshittomar/.ao/data/worktrees/scratch/orch...[truncated]",
+  "ppid": 1,
+  "uid": 503,
+  "cpu": 0.7,
+  "memory": 0
+}
+{
+  "pid": 74252,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/scratch/orchestrators/scratch-1' || exit; uns...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 74254,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 74252,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 74257,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id 46eba496-4b3c-51fb-ba6f-553c63b2bb75 --append-sys...[truncated]",
+  "ppid": 74254,
+  "uid": 503,
+  "cpu": 8.1,
+  "memory": 1.2
+}
+{
+  "pid": 80421,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/tourist/orchestrator/tourist-orchestrator' ||...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 80423,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 80421,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 80426,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id 8b34fc57-0428-5f99-ab3a-0a90ea1fce99 --append-sys...[truncated]",
+  "ppid": 80423,
+  "uid": 503,
+  "cpu": 5.8,
+  "memory": 0.9
+}
+{
+  "pid": 87984,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2' || exit; unset NO_COLOR; e...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 87986,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 87984,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 87989,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id e3edd3dd-9f3d-5cc2-a77e-67ec313a3e61 --append-sys...[truncated]",
+  "ppid": 87986,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 1
+}
+{
+  "pid": 88409,
+  "name": "zsh",
+  "cmd": "/bin/zsh -c cd '/Users/harshittomar/.ao/data/worktrees/tourist/tourist-3' || exit; unset NO_COLOR; e...[truncated]",
+  "ppid": 74251,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 88411,
+  "name": "ao",
+  "cmd": "/Applications/Agent Orchestrator.app/Contents/Resources/daemon/ao agent-process supervise --session ...[truncated]",
+  "ppid": 88409,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0
+}
+{
+  "pid": 88414,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude --session-id 7d02dab1-24bb-5e4f-bce6-9ca6c6ca4f72 --append-sys...[truncated]",
+  "ppid": 88411,
+  "uid": 503,
+  "cpu": 2.2,
+  "memory": 1.3
+}
+{
+  "pid": 89624,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/bin/claude daemon run --origin transient --spawned-by {\"label\":\"claude\",\"...[truncated]",
+  "ppid": 87989,
+  "uid": 503,
+  "cpu": 0.2,
+  "memory": 0.6
+}
+{
+  "pid": 89649,
+  "name": "claude bg-pty-host",
+  "cmd": "claude bg-pty-host --bg-pty-host /tmp/cc-daemon-503/1651367e/spare/9debb107.pty.sock 200 50 -- /User...[truncated]",
+  "ppid": 89624,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.5
+}
+{
+  "pid": 89650,
+  "name": "claude",
+  "cmd": "/Users/harshittomar/.local/share/claude/ClaudeCode.app/Contents/MacOS/claude --bg-pty-host /tmp/cc-d...[truncated]",
+  "ppid": 89624,
+  "uid": 503,
+  "cpu": 0.1,
+  "memory": 0.5
+}
+{
+  "pid": 89665,
+  "name": "claude bg-spare",
+  "cmd": "claude bg-spare --bg-spare /tmp/cc-daemon-503/1651367e/spare/9debb107.claim.sock",
+  "ppid": 89649,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 0.5
+}
+{
+  "pid": 89778,
+  "name": "2.1.228",
+  "cmd": "/Users/harshittomar/.local/share/claude/versions/2.1.228 --session-id 802a046f-acdb-49d8-8b74-bfcb8e...[truncated]",
+  "ppid": 89650,
+  "uid": 503,
+  "cpu": 0,
+  "memory": 1.2
+}
+
+sample process shape (first entry) -- which fields does ps-list actually populate on this platform:
+{
+  "pid": 1,
+  "name": "launchd",
+  "cmd": "/sbin/launchd",
+  "ppid": 0,
+  "uid": 0,
+  "cpu": 0.1,
+  "memory": 0
+}
+
+fields present across ALL processes (union of keys):
+[
+  'cmd',    'cpu',
+  'memory', 'name',
+  'pid',    'ppid',
+  'uid'
+]
+
+cross-checking cwd via `lsof -a -p <pid> -d cwd` for each matched pid:
+pid 7563: n/Users/harshittomar
+pid 11299: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-4
+pid 11301: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-4
+pid 11304: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-4
+pid 15942: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-5
+pid 15944: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-5
+pid 15947: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-5
+pid 36157: n/private/tmp/tourist-spike-exp6-notrepo
+pid 36990: n/Users/harshittomar/Tourist/spike/experiments/09-process-scan
+pid 36995: n/private/tmp/tourist-spike-exp9-fakews.OjYfXj
+pid 71651: n/
+pid 71656: n/
+pid 71657: n/
+pid 71659: n/
+pid 71666: n/
+pid 71692: n/
+pid 72077: n/
+pid 72078: n/
+pid 72100: n/
+pid 72101: n/
+pid 72149: n/
+pid 74251: n/private/var/folders/fv/4spyv55125b44v3nncjsh62h0000gq/T
+pid 74252: n/Users/harshittomar/.ao/data/worktrees/scratch/orchestrators/scratch-1
+pid 74254: n/Users/harshittomar/.ao/data/worktrees/scratch/orchestrators/scratch-1
+pid 74257: n/Users/harshittomar/.ao/data/worktrees/scratch/orchestrators/scratch-1
+pid 80421: n/Users/harshittomar/.ao/data/worktrees/tourist/orchestrator/tourist-orchestrator
+pid 80423: n/Users/harshittomar/.ao/data/worktrees/tourist/orchestrator/tourist-orchestrator
+pid 80426: n/Users/harshittomar/.ao/data/worktrees/tourist/orchestrator/tourist-orchestrator
+pid 87984: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2
+pid 87986: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2
+pid 87989: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2
+pid 88409: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-3
+pid 88411: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-3
+pid 88414: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-3
+pid 89624: n/Users/harshittomar
+pid 89649: n/private/tmp/cc-daemon-503/1651367e/spare
+pid 89650: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2
+pid 89665: n/private/tmp/cc-daemon-503/1651367e/spare
+pid 89778: n/Users/harshittomar/.ao/data/worktrees/tourist/tourist-2

@@ -1,0 +1,10 @@
+watching /Users/harshittomar/.claude/ide
+initial lock files: [ '26669.lock' ]
+26669.lock -> {"pid":57602,"workspaceFolders":["/Users/harshittomar/tourist"],"ideName":"Visual Studio Code","transport":"ws","runningInWindows":false,"authToken":"[REDACTED]"}
+
+--- synthetic stale-lock test ---
+wrote synthetic stale lock at /Users/harshittomar/.claude/ide/999999.lock
+still present after 1s (nothing auto-cleans by file-existence alone)? true
+pid liveness check result for the dead pid: false
+pid liveness check result for OUR OWN pid (sanity check, should be true): true
+cleaned up synthetic lock file

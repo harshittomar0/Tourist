@@ -1,0 +1,33 @@
+{
+  "name": "tourist-v2",
+  "displayName": "Tourist",
+  "description": "Live, per-line AI-vs-human-vs-external attribution for Claude Code in VS Code.",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc --noEmit -p .",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "ignore": "^5.3.2",
+    "ps-list": "^8.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

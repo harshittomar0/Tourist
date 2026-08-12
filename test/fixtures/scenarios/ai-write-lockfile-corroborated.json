@@ -1,0 +1,21 @@
+{
+  "name": "ai-write-lockfile-corroborated",
+  "description": "A disk write while clean-before-and-after, corroborated by an active lock-file signal, is attributed ai/2a.",
+  "ref": "PLAN1.md Phase 1 exit criteria -- tier transition coverage; Phase 0 experiment 2 (lock-file lifecycle)",
+  "workspaceId": "ws1",
+  "steps": [
+    { "kind": "setCorroborationSignal", "workspaceId": "ws1", "source": "lock-file", "active": true, "since": 0 },
+    { "kind": "open", "docId": "doc1", "content": "" },
+    {
+      "kind": "pushChanges",
+      "batch": {
+        "docId": "doc1",
+        "changes": [{ "rangeOffset": 0, "rangeLength": 0, "text": "const x = 1;" }],
+        "dirtyBefore": false,
+        "dirtyAfter": false,
+        "reason": "typed",
+        "timestamp": 1
+      }
+    }
+  ]
+}

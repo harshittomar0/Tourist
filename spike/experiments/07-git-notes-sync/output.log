@@ -1,0 +1,82 @@
+== workdir: /tmp/tourist-spike-exp7.tsuKxx ==
+
+--- 1. init bare origin + two clones ---
+warning: You appear to have cloned an empty repository.
+warning: You appear to have cloned an empty repository.
+
+--- 2. clone-a: seed commit + push ---
+seed commit sha: 300b720a47787a21ad225e5663c28afcd9fdbf61
+
+--- 3. clone-b: fetch the seed commit (but NOT any note yet) ---
+
+--- 4. clone-a: write note A for $SHA, push notes ref ---
+clone-a note pushed. Current note in clone-a:
+{"author":"clone-a","ranges":[{"start":0,"end":5,"origin":"ai","tier":"2a"}]}
+
+--- 5. clone-b: WITHOUT fetching origin's note, write a DIFFERENT note for the SAME sha (genuine divergence) ---
+clone-b note (local, divergent):
+{"author":"clone-b","ranges":[{"start":0,"end":5,"origin":"human","tier":null}]}
+
+--- 6. clone-b: fetch origin's notes ref into a staging ref (does NOT clobber local) ---
+From /tmp/tourist-spike-exp7.tsuKxx/origin
+ * [new ref]         refs/notes/tourist-attribution -> refs/notes/origin/tourist-attribution
+fetch rc=0
+
+--- 7. clone-b: attempt `git notes merge` of the fetched ref into the local notes ref ---
+Automatic notes merge failed. Fix conflicts in .git/NOTES_MERGE_WORKTREE and commit the result with 'git notes merge --commit', or abort the merge with 'git notes merge --abort'.
+Auto-merging notes for 300b720a47787a21ad225e5663c28afcd9fdbf61
+CONFLICT (add/add): Merge conflict in notes for object 300b720a47787a21ad225e5663c28afcd9fdbf61
+merge rc=1
+
+--- 8. inspect merge state ---
+CONFLICT: .git/NOTES_MERGE_WORKTREE exists. Contents:
+.git/NOTES_MERGE_WORKTREE/300b720a47787a21ad225e5663c28afcd9fdbf61
+  ---
+<<<<<<< refs/notes/tourist-attribution
+{"author":"clone-b","ranges":[{"start":0,"end":5,"origin":"human","tier":null}]}
+=======
+{"author":"clone-a","ranges":[{"start":0,"end":5,"origin":"ai","tier":"2a"}]}
+>>>>>>> refs/notes/origin/tourist-attribution
+
+git status inside the notes-merge state:
+(NOTES_MERGE_PARTIAL / NOTES_MERGE_REF, if present):
+-rw-r--r--@  1 harshittomar  wheel   41 Aug 12 14:15 NOTES_MERGE_PARTIAL
+-rw-r--r--@  1 harshittomar  wheel   36 Aug 12 14:15 NOTES_MERGE_REF
+drwxr-xr-x@  3 harshittomar  wheel   96 Aug 12 14:15 NOTES_MERGE_WORKTREE
+
+--- 9. attempt a scripted structured-JSON conflict resolution driven purely from the shell (proxy for child_process) ---
+conflicted note file: .git/NOTES_MERGE_WORKTREE/300b720a47787a21ad225e5663c28afcd9fdbf61
+<<<<<<< refs/notes/tourist-attribution
+{"author":"clone-b","ranges":[{"start":0,"end":5,"origin":"human","tier":null}]}
+=======
+{"author":"clone-a","ranges":[{"start":0,"end":5,"origin":"ai","tier":"2a"}]}
+>>>>>>> refs/notes/origin/tourist-attribution
+RAW CONTENT OF CONFLICTED NOTE FILE:
+<<<<<<< refs/notes/tourist-attribution
+{"author":"clone-b","ranges":[{"start":0,"end":5,"origin":"human","tier":null}]}
+=======
+{"author":"clone-a","ranges":[{"start":0,"end":5,"origin":"ai","tier":"2a"}]}
+>>>>>>> refs/notes/origin/tourist-attribution
+
+notes merge --commit rc=0
+final merged note in clone-b:
+{"author":"merged","ranges":[{"start":0,"end":5,"origin":"ai","tier":"2a"},{"start":0,"end":5,"origin":"human","tier":null}]}
+
+--- 10. attempt clone-b push of its (now merged) notes ref back to origin ---
+To /tmp/tourist-spike-exp7.tsuKxx/origin.git
+   17dbb98..da1d9c3  refs/notes/tourist-attribution -> refs/notes/tourist-attribution
+push rc=0
+
+--- 11. sanity: rejected-push case -- clone-a pushes again without ever merging clone-b's version ---
+Overwriting existing notes for object 300b720a47787a21ad225e5663c28afcd9fdbf61
+To /tmp/tourist-spike-exp7.tsuKxx/origin.git
+ ! [rejected]        refs/notes/tourist-attribution -> refs/notes/tourist-attribution (fetch first)
+error: failed to push some refs to '/tmp/tourist-spike-exp7.tsuKxx/origin.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+clone-a's second (unmerged, stale-base) push rc=1 (expect non-zero / rejected as non-fast-forward)
+
+== DONE. workdir left at /tmp/tourist-spike-exp7.tsuKxx for manual inspection. ==
