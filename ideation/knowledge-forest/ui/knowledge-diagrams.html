@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Developer knowledge — illustrative mockups</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --owner-1: #2a78d6; /* Priya   */
+    --owner-2: #eb6834; /* Dev B   */
+    --owner-3: #1baf7a; /* Dev C   */
+    --owner-4: #eda100; /* Dev D   */
+    --owner-5: #e87ba4; /* Dev E   */
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+    display: block;
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --owner-1: #3987e5;
+      --owner-2: #d95926;
+      --owner-3: #199e70;
+      --owner-4: #c98500;
+      --owner-5: #d55181;
+    }
+  }
+  html[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --owner-1: #3987e5;
+    --owner-2: #d95926;
+    --owner-3: #199e70;
+    --owner-4: #c98500;
+    --owner-5: #d55181;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    gap: 16px;
+  }
+  header.top h1 { font-size: 20px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--text-secondary); font-size: 13px; max-width: 560px; }
+  .theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px 24px;
+    margin-bottom: 32px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .sub { color: var(--text-secondary); font-size: 12.5px; margin: 0 0 16px; }
+
+  /* ---------- Treemap ---------- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .legend .badge-key { display: flex; align-items: center; gap: 6px; margin-left: 4px; padding-left: 14px; border-left: 1px solid var(--gridline); }
+
+  #treemap-wrap { position: relative; }
+  #treemap { display: block; width: 100%; height: auto; }
+  .tile rect { stroke: var(--surface-1); stroke-width: 2; }
+  .tile text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: none; }
+  .tile .name { font-size: 12px; font-weight: 600; }
+  .tile .owner { font-size: 10.5px; opacity: 0.9; }
+  .tile:hover rect { filter: brightness(1.06); }
+  .badge-icon { cursor: default; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    line-height: 1.5;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 0.1s ease;
+    max-width: 220px;
+    z-index: 5;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .t-value { font-weight: 700; }
+  .tooltip .t-row { display: flex; justify-content: space-between; gap: 10px; }
+
+  .table-toggle {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--gridline);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 12.5px;
+    display: none;
+  }
+  table.data-table.show { display: table; }
+  table.data-table th, table.data-table td {
+    text-align: left;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  table.data-table th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
+  table.data-table td.owner-cell { display: flex; align-items: center; gap: 6px; }
+  table.data-table .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .risk-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+  .risk-chip.warning { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: #8a5a00; }
+  .risk-chip.critical { background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: #9c2020; }
+  html[data-theme="dark"] .risk-chip.warning, html:not([data-theme="light"]) .risk-chip.warning { color: var(--status-warning); }
+  html[data-theme="dark"] .risk-chip.critical, html:not([data-theme="light"]) .risk-chip.critical { color: var(--status-critical); }
+
+  /* ---------- Johari window ---------- */
+  .johari-wrap {
+    display: grid;
+    grid-template-columns: 28px 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 10px;
+  }
+  .axis-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .axis-label.col { grid-row: 1; }
+  .axis-label.row-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    grid-column: 1;
+  }
+  .col-1 { grid-column: 2; }
+  .col-2 { grid-column: 3; }
+  .row-1 { grid-row: 2; }
+  .row-2 { grid-row: 3; }
+  .quad {
+    border-radius: 8px;
+    padding: 16px 16px 14px;
+    border: 1px solid var(--border);
+    min-height: 150px;
+  }
+  .quad h3 { margin: 0 0 8px; font-size: 13.5px; }
+  .quad ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; }
+  .quad ul li { margin-bottom: 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-bottom: 10px; }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .q-good   { background: color-mix(in srgb, var(--status-good) 12%, var(--surface-1)); }
+  .q-warning{ background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-1)); }
+  .q-serious{ background: color-mix(in srgb, var(--status-serious) 14%, var(--surface-1)); }
+  .q-critical{ background: color-mix(in srgb, var(--status-critical) 12%, var(--surface-1)); }
+  .chip-good { background: color-mix(in srgb, var(--status-good) 20%, transparent); color: #0a6b0a; }
+  .chip-warning { background: color-mix(in srgb, var(--status-warning) 24%, transparent); color: #8a5a00; }
+  .chip-serious { background: color-mix(in srgb, var(--status-serious) 20%, transparent); color: #9c3d1c; }
+  .chip-critical { background: color-mix(in srgb, var(--status-critical) 18%, transparent); color: #9c2020; }
+  html[data-theme="dark"] .chip-good, html:not([data-theme="light"]) .chip-good { color: var(--status-good); }
+  html[data-theme="dark"] .chip-warning, html:not([data-theme="light"]) .chip-warning { color: var(--status-warning); }
+  html[data-theme="dark"] .chip-serious, html:not([data-theme="light"]) .chip-serious { color: var(--status-serious); }
+  html[data-theme="dark"] .chip-critical, html:not([data-theme="light"]) .chip-critical { color: var(--status-critical); }
+  .quad .foot { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="page">
+
+    <header class="top">
+      <div>
+        <h1>Developer knowledge — illustrative mockups</h1>
+        <p>Synthetic data for discussion purposes only. Left: repo ownership &amp; criticality as a treemap. Right below: knowledge gaps as a Johari window.</p>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button">Dark mode</button>
+    </header>
+
+    <!-- ================= TREEMAP ================= -->
+    <section class="card">
+      <h2>Repo ownership &amp; criticality</h2>
+      <p class="sub">Tile size = share of lines of code · fill = dominant contributor · badge = critical-path module with low bus factor</p>
+
+      <div class="legend" id="legend"></div>
+
+      <div id="treemap-wrap">
+        <svg id="treemap" viewBox="0 0 760 420" role="img" aria-label="Treemap of repository modules colored by dominant contributor"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+
+      <button class="table-toggle" id="tableToggle" type="button">View as table</button>
+      <table class="data-table" id="dataTable">
+        <thead>
+          <tr><th>Module</th><th>Dominant owner</th><th>Share</th><th>Bus factor</th><th>Critical path</th><th>Risk</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ================= JOHARI WINDOW ================= -->
+    <section class="card">
+      <h2>Knowledge gaps — Johari window</h2>
+      <p class="sub">Two axes: does the person know it about themselves (columns) · does the team/system have evidence for it (rows)</p>
+
+      <div class="johari-wrap">
+        <div></div>
+        <div class="axis-label col col-1">Known to self</div>
+        <div class="axis-label col col-2">Unknown to self</div>
+        <div class="axis-label row-label row-1">Known to team</div>
+
+        <div class="quad q-good col-1 row-1">
+          <span class="chip chip-good"><span class="dot" style="background:var(--status-good)"></span>Open</span>
+          <h3>Confirmed strength</h3>
+          <ul>
+            <li>Python / async — heavy recent commits</li>
+            <li>REST API design — reviewed &amp; approved repeatedly</li>
+          </ul>
+          <div class="foot">Evidence exists and they know it. Nothing to do here.</div>
+        </div>
+
+        <div class="quad q-serious col-2 row-1">
+          <span class="chip chip-serious"><span class="dot" style="background:var(--status-serious)"></span>Blind spot</span>
+          <h3>Visible to others, not to them</h3>
+          <ul>
+            <li>N+1 query pattern flagged 4× in review, not self-corrected</li>
+            <li>Skips input validation on new endpoints</li>
+          </ul>
+          <div class="foot">Actionable via direct feedback — the evidence already exists.</div>
+        </div>
+
+        <div class="axis-label row-label row-2">Unknown to team</div>
+
+        <div class="quad q-warning col-1 row-2">
+          <span class="chip chip-warning"><span class="dot" style="background:var(--status-warning)"></span>Known gap</span>
+          <h3>Self-declared, unconfirmed</h3>
+          <ul>
+            <li>"I've never done load testing"</li>
+            <li>No hands-on Kubernetes debugging experience</li>
+          </ul>
+          <div class="foot">Lower risk — it's already disclosed and can be planned for.</div>
+        </div>
+
+        <div class="quad q-critical col-2 row-2">
+          <span class="chip chip-critical"><span class="dot" style="background:var(--status-critical)"></span>Unknown-unknown</span>
+          <h3>No evidence anywhere</h3>
+          <ul>
+            <li>Role expects Kafka — zero commits touch messaging code</li>
+            <li>Never exercised the idempotency path that later caused an incident</li>
+          </ul>
+          <div class="foot">Highest risk — only surfaces via role-diff or an incident.</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------------- Data ----------------
+  var owners = [
+    { name: "Priya", color: "var(--owner-1)" },
+    { name: "Dev B", color: "var(--owner-2)" },
+    { name: "Dev C", color: "var(--owner-3)" },
+    { name: "Dev D", color: "var(--owner-4)" },
+    { name: "Dev E", color: "var(--owner-5)" }
+  ];
+  var ownerByName = {};
+  owners.forEach(function (o) { ownerByName[o.name] = o; });
+
+  var modules = [
+    { name: "frontend/",      value: 260, owner: "Dev C", share: 45, busFactor: 3, critical: false },
+    { name: "payments/",      value: 180, owner: "Priya", share: 92, busFactor: 1, critical: true  },
+    { name: "auth/",          value: 140, owner: "Priya", share: 62, busFactor: 2, critical: true  },
+    { name: "infra/",         value: 120, owner: "Dev D", share: 70, busFactor: 2, critical: true  },
+    { name: "shared-utils/",  value: 100, owner: "Dev E", share: 55, busFactor: 2, critical: false },
+    { name: "billing-api/",   value: 90,  owner: "Dev B", share: 100, busFactor: 1, critical: true  },
+    { name: "notifications/", value: 60,  owner: "Dev E", share: 50, busFactor: 2, critical: false },
+    { name: "search/",        value: 50,  owner: "Dev D", share: 100, busFactor: 1, critical: false }
+  ];
+
+  function riskLevel(m) {
+    if (!m.critical) return null;
+    if (m.busFactor <= 1) return "critical";
+    if (m.busFactor <= 2) return "warning";
+    return null;
+  }
+
+  // ---------------- Legend ----------------
+  var legend = document.getElementById("legend");
+  owners.forEach(function (o) {
+    var el = document.createElement("span");
+    el.className = "item";
+    el.innerHTML = '<span class="swatch" style="background:' + o.color + '"></span>';
+    var label = document.createElement("span");
+    label.textContent = o.name;
+    el.appendChild(label);
+    legend.appendChild(el);
+  });
+  var badgeKey = document.createElement("span");
+  badgeKey.className = "badge-key";
+  badgeKey.innerHTML =
+    '<span>&#9888;&#65039; low bus factor</span><span style="margin-left:10px">&#9940; single owner + critical path</span>';
+  legend.appendChild(badgeKey);
+
+  // ---------------- Squarify treemap layout ----------------
+  function squarify(items, x, y, w, h) {
+    var total = items.reduce(function (s, d) { return s + d.value; }, 0);
+    var scale = (w * h) / total;
+    var withArea = items.map(function (d) {
+      var copy = {};
+      for (var k in d) copy[k] = d[k];
+      copy.area = d.value * scale;
+      return copy;
+    });
+    var results = [];
+    layoutRow(withArea, x, y, w, h, results);
+    return results;
+  }
+
+  function worstAspect(row, length) {
+    var sum = row.reduce(function (s, d) { return s + d.area; }, 0);
+    var rowLength = sum / length;
+    var worst = 0;
+    row.forEach(function (d) {
+      var size = d.area / rowLength;
+      var ratio = Math.max(rowLength / size, size / rowLength);
+      worst = Math.max(worst, ratio);
+    });
+    return worst;
+  }
+
+  function layoutRow(items, x, y, w, h, results) {
+    if (!items.length) return;
+    var horizontal = w >= h;
+    var length = horizontal ? h : w;
+    var row = [items[0]];
+    var i = 1;
+    while (i < items.length && worstAspect(row, length) >= worstAspect(row.concat(items[i]), length)) {
+      row.push(items[i]);
+      i++;
+    }
+    var rowArea = row.reduce(function (s, d) { return s + d.area; }, 0);
+    var rowLength = rowArea / length;
+    var offset = 0;
+    row.forEach(function (d) {
+      var size = d.area / rowLength;
+      if (horizontal) {
+        results.push(Object.assign({}, d, { x: x, y: y + offset, w: rowLength, h: size }));
+      } else {
+        results.push(Object.assign({}, d, { x: x + offset, y: y, w: size, h: rowLength }));
+      }
+      offset += size;
+    });
+    if (horizontal) {
+      layoutRow(items.slice(row.length), x + rowLength, y, w - rowLength, h, results);
+    } else {
+      layoutRow(items.slice(row.length), x, y + rowLength, w, h - rowLength, results);
+    }
+  }
+
+  var sorted = modules.slice().sort(function (a, b) { return b.value - a.value; });
+  var W = 760, H = 420;
+  var tiles = squarify(sorted, 0, 0, W, H);
+
+  // ---------------- Render SVG ----------------
+  var svg = document.getElementById("treemap");
+  var tooltip = document.getElementById("tooltip");
+  var wrap = document.getElementById("treemap-wrap");
+
+  function luminanceOf(cssVar) {
+    // resolve the CSS var to a hex by reading computed style on body
+    var probe = document.createElement("span");
+    probe.style.color = cssVar;
+    document.body.appendChild(probe);
+    var rgb = getComputedStyle(probe).color.match(/\d+/g).map(Number);
+    document.body.removeChild(probe);
+    var lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+    return lum;
+  }
+
+  tiles.forEach(function (t) {
+    var owner = ownerByName[t.owner];
+    var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "tile");
+    g.setAttribute("tabindex", "0");
+
+    var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", t.x);
+    rect.setAttribute("y", t.y);
+    rect.setAttribute("width", Math.max(t.w - 0, 0));
+    rect.setAttribute("height", Math.max(t.h - 0, 0));
+    rect.setAttribute("fill", owner.color);
+    g.appendChild(rect);
+
+    var textColor = luminanceOf(owner.color) > 0.55 ? "var(--text-primary)" : "#ffffff";
+
+    if (t.w > 60 && t.h > 30) {
+      var name = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      name.setAttribute("class", "name");
+      name.setAttribute("x", t.x + 10);
+      name.setAttribute("y", t.y + 20);
+      name.setAttribute("fill", textColor);
+      name.textContent = t.name;
+      g.appendChild(name);
+
+      if (t.h > 46) {
+        var ownerLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        ownerLabel.setAttribute("class", "owner");
+        ownerLabel.setAttribute("x", t.x + 10);
+        ownerLabel.setAttribute("y", t.y + 36);
+        ownerLabel.setAttribute("fill", textColor);
+        ownerLabel.textContent = t.owner + " · " + t.share + "%";
+        g.appendChild(ownerLabel);
+      }
+    }
+
+    var risk = riskLevel(t);
+    if (risk && t.w > 40 && t.h > 30) {
+      var badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      badge.setAttribute("class", "badge-icon");
+      badge.setAttribute("x", t.x + t.w - 10);
+      badge.setAttribute("y", t.y + 20);
+      badge.setAttribute("text-anchor", "end");
+      badge.setAttribute("font-size", "14");
+      badge.textContent = risk === "critical" ? "⛔" : "⚠️";
+      g.appendChild(badge);
+    }
+
+    function showTip(evt) {
+      tooltip.innerHTML = "";
+      var rowsData = [
+        ["Owner", t.owner + " (" + t.share + "%)"],
+        ["Bus factor", String(t.busFactor)],
+        ["Critical path", t.critical ? "Yes" : "No"]
+      ];
+      var title = document.createElement("div");
+      title.className = "t-value";
+      title.textContent = t.name;
+      tooltip.appendChild(title);
+      rowsData.forEach(function (r) {
+        var row = document.createElement("div");
+        row.className = "t-row";
+        var k = document.createElement("span");
+        k.textContent = r[0];
+        var v = document.createElement("span");
+        v.className = "t-value";
+        v.textContent = r[1];
+        row.appendChild(k);
+        row.appendChild(v);
+        tooltip.appendChild(row);
+      });
+      var bounds = wrap.getBoundingClientRect();
+      var px = (evt.clientX !== undefined ? evt.clientX : bounds.left + t.x + t.w / 2) - bounds.left;
+      var py = (evt.clientY !== undefined ? evt.clientY : bounds.top + t.y) - bounds.top;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = py + "px";
+      tooltip.classList.add("show");
+    }
+    function hideTip() { tooltip.classList.remove("show"); }
+
+    g.addEventListener("pointermove", showTip);
+    g.addEventListener("pointerenter", showTip);
+    g.addEventListener("pointerleave", hideTip);
+    g.addEventListener("focus", function (e) { showTip({ clientX: undefined, clientY: undefined }); });
+    g.addEventListener("blur", hideTip);
+
+    svg.appendChild(g);
+  });
+
+  // ---------------- Table view ----------------
+  var tbody = document.querySelector("#dataTable tbody");
+  modules.forEach(function (m) {
+    var owner = ownerByName[m.owner];
+    var risk = riskLevel(m);
+    var tr = document.createElement("tr");
+
+    var tdName = document.createElement("td");
+    tdName.textContent = m.name;
+    tr.appendChild(tdName);
+
+    var tdOwner = document.createElement("td");
+    tdOwner.className = "owner-cell";
+    var dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = owner.color;
+    var ownerText = document.createElement("span");
+    ownerText.textContent = m.owner;
+    tdOwner.appendChild(dot);
+    tdOwner.appendChild(ownerText);
+    tr.appendChild(tdOwner);
+
+    var tdShare = document.createElement("td");
+    tdShare.textContent = m.share + "%";
+    tr.appendChild(tdShare);
+
+    var tdBus = document.createElement("td");
+    tdBus.textContent = String(m.busFactor);
+    tr.appendChild(tdBus);
+
+    var tdCrit = document.createElement("td");
+    tdCrit.textContent = m.critical ? "Yes" : "No";
+    tr.appendChild(tdCrit);
+
+    var tdRisk = document.createElement("td");
+    if (risk) {
+      var chip = document.createElement("span");
+      chip.className = "risk-chip " + risk;
+      chip.textContent = risk === "critical" ? "⛔ Critical" : "⚠️ Watch";
+      tdRisk.appendChild(chip);
+    } else {
+      tdRisk.textContent = "—";
+    }
+    tr.appendChild(tdRisk);
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("tableToggle").addEventListener("click", function () {
+    var table = document.getElementById("dataTable");
+    var showing = table.classList.toggle("show");
+    this.textContent = showing ? "Hide table" : "View as table";
+  });
+
+  // ---------------- Theme toggle ----------------
+  var html = document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    var isDark = html.getAttribute("data-theme") === "dark";
+    html.setAttribute("data-theme", isDark ? "light" : "dark");
+    this.textContent = isDark ? "Dark mode" : "Light mode";
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge forest — interactive tech-stack trees</title>
+<style>
+  /* Theme tokens live on .viz-root. body sits ABOVE .viz-root in the DOM, so
+     it can never see these custom properties — background/color must be
+     declared on .viz-root itself (once, with var()); each theme block below
+     only needs to override the variable values and the cascade re-resolves
+     background/color automatically for every descendant. */
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --status-warning: #fab219;
+    --status-good: #0ca30c;
+    --ai-ink: #8a5a00;
+    display: block;
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  html[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --ai-ink: var(--status-warning);
+  }
+  html[data-theme="midnight"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #14161c; --page: #0a0b0f;
+    --text-primary: #f5f6fa; --text-secondary: #a9adc1; --text-muted: #6b6f83;
+    --gridline: #262a35; --border: rgba(255,255,255,0.08);
+    --ai-ink: var(--status-warning);
+  }
+  html[data-theme="slate"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #23262b; --page: #1b1d21;
+    --text-primary: #eef0f2; --text-secondary: #b7bac0; --text-muted: #7d8087;
+    --gridline: #33363c; --border: rgba(255,255,255,0.09);
+    --ai-ink: var(--status-warning);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .page { max-width: 1200px; margin:0 auto; padding: 28px 24px 64px; }
+
+  header.top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom: 18px; }
+  header.top h1 { font-size:19px; margin:0 0 4px; color:var(--text-primary); }
+  header.top p { margin:0; color:var(--text-secondary); font-size:13px; max-width:620px; }
+  .theme-select { border:1px solid var(--border); background:var(--surface-1); color:var(--text-secondary); font-size:12px; padding:6px 10px; border-radius:6px; cursor:pointer; flex:none; }
+
+  .legend {
+    display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--text-secondary);
+    background:var(--surface-1); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:14px;
+  }
+  .legend .grp { display:flex; align-items:center; gap:6px; }
+  .legend .swatch { display:inline-flex; align-items:center; justify-content:center; width:16px; }
+  .legend .chipdemo { font-size:11px; padding:2px 7px; border-radius:999px; border:1px dashed var(--status-warning); color:var(--ai-ink); }
+  .legend .chipdemo.gap { border-color:var(--text-muted); color:var(--text-muted); }
+
+  .section-head { margin: 26px 0 10px; }
+  .section-head:first-of-type { margin-top: 4px; }
+  .section-head h2 { font-size:15px; margin:0 0 2px; color:var(--text-primary); }
+  .section-head p { margin:0; color:var(--text-secondary); font-size:12.5px; }
+
+  .section-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:12px; }
+  .summary { font-size:12.5px; color:var(--text-muted); }
+
+  .btn-add-stack {
+    font-size:12.5px; font-weight:600; color:var(--text-primary); background:var(--surface-1);
+    border:1px solid var(--border); border-radius:7px; padding:7px 12px; cursor:pointer; flex:none;
+  }
+
+  .forest { display:flex; gap:16px; overflow-x:auto; padding-bottom: 12px; align-items:flex-start; }
+  .stack-card {
+    background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+    padding:14px 14px 16px; min-width:320px; max-width:340px; flex:none;
+  }
+
+  .node-row {
+    display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:6px;
+    border:1px solid transparent; position:relative;
+  }
+  .node-row:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+  .node-row.is-root { font-weight:700; font-size:14.5px; padding:6px 8px 6px 4px; margin-bottom:2px; }
+  .node-row.prov-ai { border:1px dashed var(--status-warning); background: color-mix(in srgb, var(--status-warning) 7%, transparent); }
+  .node-row.prov-gap { border:1px dashed var(--text-muted); background: color-mix(in srgb, var(--text-muted) 5%, transparent); }
+
+  .icon-btn {
+    background:none; border:none; cursor:pointer; font-size:12px; line-height:1;
+    padding:2px 3px; border-radius:4px; color:var(--text-secondary); flex:none;
+  }
+  .icon-btn:hover { background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+  .chevron { width:14px; text-align:center; flex:none; color:var(--text-muted); font-size:11px; }
+  .chevron.placeholder { visibility:hidden; }
+  .node-icon { flex:none; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; }
+  .node-icon svg { display:block; }
+  .label { flex:1 1 auto; font-size:13px; cursor:default; color:var(--text-primary); }
+
+  .dots { display:flex; gap:2px; flex:none; }
+  .dot { width:7px; height:7px; border-radius:50%; border:1px solid var(--text-muted); background:transparent; cursor:pointer; padding:0; }
+  .dot.filled { background:var(--text-secondary); border-color:var(--text-secondary); }
+  .node-row.is-root .dot.filled { background:var(--text-primary); border-color:var(--text-primary); }
+
+  .chip { font-size:10.5px; font-weight:600; padding:2px 6px; border-radius:999px; flex:none; white-space:nowrap; }
+  .chip-ai { border:1px solid var(--status-warning); color:var(--ai-ink); }
+  .chip-gap { border:1px solid var(--text-muted); color:var(--text-muted); }
+
+  .row-actions { display:flex; gap:1px; flex:none; opacity:0; transition:opacity .1s ease; }
+  .node-row:hover .row-actions, .node-row:focus-within .row-actions { opacity:1; }
+
+  .break-pill {
+    font-size:10.5px; border:1px dashed var(--gridline); color:var(--text-muted);
+    background:none; border-radius:999px; padding:2px 8px; cursor:pointer; flex:none;
+  }
+  .break-pill:hover { border-color:var(--text-secondary); color:var(--text-secondary); }
+
+  .tree, .tree ul { list-style:none; margin:0; padding-left:20px; }
+  .tree { padding-top:2px; }
+  .tree li { position:relative; padding-left:16px; }
+  .tree li::before {
+    content:''; position:absolute; left:0; top:16px; width:12px; height:1px; background:var(--gridline);
+  }
+  .tree li::after {
+    content:''; position:absolute; left:0; top:0; bottom:0; width:1px; background:var(--gridline);
+  }
+  .tree li:last-child::after { bottom:auto; height:16px; }
+
+  @keyframes pop-in { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+  .tree.freshly-broken > li { animation: pop-in .18s ease-out; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="page">
+
+    <header class="top">
+      <div>
+        <h1>Knowledge forest</h1>
+        <p>Representation layer only — no LLM wiring yet. State lives in this browser tab and resets on reload. Three forests: tool/framework knowledge, theoretical CS fundamentals, and engineering practice — evidenced by process signals (PRs, reviews, bugs) rather than code content.</p>
+      </div>
+      <select class="theme-select" id="themeSelect">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="midnight">Midnight</option>
+        <option value="slate">Slate</option>
+      </select>
+    </header>
+
+    <div class="legend">
+      <div class="grp"><span class="swatch" data-icon="root"></span>Root</div>
+      <div class="grp"><span class="swatch" data-icon="branch"></span>Elaborated branch</div>
+      <div class="grp"><span class="swatch" data-icon="latent"></span>Tap to reveal more (breaks into a branch)</div>
+      <div class="grp"><span class="swatch" data-icon="leaf"></span>Leaf</div>
+      <div class="grp">No badge = confirmed by you</div>
+      <div class="grp"><span class="chipdemo">AI · needs review</span> = inferred, unconfirmed</div>
+      <div class="grp"><span class="chipdemo gap">Known gap</span> = you've said you don't know this</div>
+    </div>
+
+    <div class="section-head">
+      <h2>Tech stacks</h2>
+      <p>Tool- and framework-specific knowledge — tied to what you've actually shipped with.</p>
+    </div>
+    <div class="section-bar">
+      <div class="summary" id="summary-tech"></div>
+      <button class="btn-add-stack" id="addStackBtn-tech" type="button">+ Add tech stack</button>
+    </div>
+    <div class="forest" id="forest-tech"></div>
+
+    <div class="section-head">
+      <h2>CS fundamentals</h2>
+      <p>Theoretical knowledge that holds regardless of which stack you're working in.</p>
+    </div>
+    <div class="section-bar">
+      <div class="summary" id="summary-cs"></div>
+      <button class="btn-add-stack" id="addStackBtn-cs" type="button">+ Add concept area</button>
+    </div>
+    <div class="forest" id="forest-cs"></div>
+
+    <div class="section-head">
+      <h2>Engineering practice</h2>
+      <p>Craft and process habits — evidenced by bugs, PR/review history, and delivery outcomes, not by which code you wrote.</p>
+    </div>
+    <div class="section-bar">
+      <div class="summary" id="summary-practice"></div>
+      <button class="btn-add-stack" id="addStackBtn-practice" type="button">+ Add practice area</button>
+    </div>
+    <div class="forest" id="forest-practice"></div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var nextId = 1000;
+  function uid() { return "n" + (nextId++); }
+  function mkNode(label, provenance, proficiency, children, latent) {
+    return {
+      id: uid(),
+      label: label,
+      provenance: provenance,     // 'confirmed' | 'ai' | 'gap'
+      proficiency: proficiency,   // 0-5
+      children: children || [],
+      latent: latent || [],
+      expanded: true
+    };
+  }
+
+  var techForestData = [
+    mkNode("Backend — Python", "confirmed", 4, [
+      mkNode("Django", "confirmed", 4, [
+        mkNode("ORM & migrations", "confirmed", 3),
+        mkNode("REST framework", "confirmed", 4),
+        mkNode("Celery / async tasks", "ai", 2)
+      ]),
+      mkNode("Async / asyncio", "confirmed", 3, [], [
+        mkNode("Concurrency patterns", "ai", 2),
+        mkNode("Race-condition debugging", "gap", 0)
+      ]),
+      mkNode("Testing (pytest)", "confirmed", 3),
+      mkNode("Kubernetes debugging", "gap", 0)
+    ]),
+    mkNode("Frontend — React", "confirmed", 3, [
+      mkNode("Hooks", "confirmed", 4),
+      mkNode("State management (Redux)", "ai", 2),
+      mkNode("Testing (RTL)", "gap", 0),
+      mkNode("Rendering performance", "confirmed", 2, [], [
+        mkNode("Memoization strategy", "ai", 2),
+        mkNode("List virtualization", "gap", 0)
+      ])
+    ]),
+    mkNode("Infra — Docker/K8s", "ai", 2, [
+      mkNode("Dockerfile authoring", "confirmed", 3),
+      mkNode("Kubernetes manifests", "ai", 1),
+      mkNode("CI/CD pipelines", "gap", 0)
+    ])
+  ];
+
+  var csForestData = [
+    mkNode("Algorithms & Complexity", "confirmed", 3, [
+      mkNode("Big-O / asymptotic analysis", "confirmed", 4),
+      mkNode("Sorting & searching", "confirmed", 3),
+      mkNode("Dynamic programming", "ai", 2),
+      mkNode("Graph algorithms (BFS/DFS, shortest path)", "confirmed", 2, [], [
+        mkNode("Advanced graph (Dijkstra, A*)", "ai", 2),
+        mkNode("NP-completeness & reductions", "gap", 0)
+      ])
+    ]),
+    mkNode("Data Structures", "confirmed", 4, [
+      mkNode("Arrays & hashing", "confirmed", 4),
+      mkNode("Trees & heaps", "confirmed", 3),
+      mkNode("Graphs", "confirmed", 3),
+      mkNode("Linked lists / stacks / queues", "confirmed", 4)
+    ]),
+    mkNode("Concurrency & Systems", "ai", 2, [
+      mkNode("Threads & processes", "confirmed", 2),
+      mkNode("Race conditions & locks", "ai", 2),
+      mkNode("Async / event loops", "confirmed", 3),
+      mkNode("Distributed systems basics (CAP, consistency)", "gap", 0)
+    ]),
+    mkNode("Architecture & Design", "confirmed", 3, [
+      mkNode("Design patterns", "confirmed", 3),
+      mkNode("SOLID principles", "confirmed", 3),
+      mkNode("System design tradeoffs", "ai", 2, [], [
+        mkNode("Caching strategies", "ai", 2),
+        mkNode("Scalability patterns", "gap", 0)
+      ])
+    ]),
+    mkNode("Security Fundamentals", "gap", 0, [
+      mkNode("OWASP top 10 / common vulns", "gap", 0),
+      mkNode("Cryptography basics", "gap", 0),
+      mkNode("AuthN/AuthZ concepts", "ai", 1)
+    ])
+  ];
+
+  var practiceForestData = [
+    mkNode("Code Quality & Craft", "confirmed", 3, [
+      mkNode("Naming & readability", "confirmed", 4),
+      mkNode("Structure & modularity", "confirmed", 3),
+      mkNode("Duplication / DRY discipline", "ai", 2),
+      mkNode("Complexity management", "confirmed", 2, [], [
+        mkNode("Cyclomatic complexity awareness", "ai", 2),
+        mkNode("Refactoring judgment", "gap", 0)
+      ])
+    ]),
+    mkNode("Testing Discipline", "ai", 2, [
+      mkNode("Unit test coverage habits", "confirmed", 3),
+      mkNode("Meaningful assertions", "confirmed", 3),
+      mkNode("Integration / e2e testing", "ai", 2),
+      mkNode("TDD practice", "gap", 0)
+    ]),
+    mkNode("Review & Collaboration", "confirmed", 3, [
+      mkNode("Review feedback quality (given)", "confirmed", 4),
+      mkNode("Responsiveness to feedback (received)", "confirmed", 3),
+      mkNode("PR / commit hygiene", "ai", 2),
+      mkNode("Async communication", "confirmed", 2, [], [
+        mkNode("Documentation habits", "ai", 2),
+        mkNode("Mentoring / knowledge sharing", "gap", 0)
+      ])
+    ]),
+    mkNode("Delivery & Ownership", "gap", 0, [
+      mkNode("Bug / defect patterns", "ai", 1),
+      mkNode("Debugging / root-causing", "confirmed", 3),
+      mkNode("Estimation & planning accuracy", "gap", 0),
+      mkNode("Incident ownership & response", "ai", 1)
+    ])
+  ];
+
+  // ---------------- rendering (shared, stateless) ----------------
+  // Graph-node icon language: hub (root) / connected node (branch, has visible
+  // edges) / dashed node (latent — edges exist but aren't discovered yet) /
+  // dot (leaf — terminal node, no further edges).
+  var ICONS = {
+    root: '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="9" r="2.75" fill="currentColor"/></svg>',
+    branch: '<svg width="16" height="16" viewBox="0 0 16 16"><line x1="8" y1="8" x2="8" y2="1.5" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="8" x2="13.5" y2="11.5" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="8" x2="2.5" y2="11.5" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="3.4" fill="currentColor"/></svg>',
+    latent: '<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.4 2.4"/></svg>',
+    leaf: '<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg>'
+  };
+  function iconType(node, isRoot) {
+    if (isRoot) return "root";
+    if (node.children.length > 0) return "branch";
+    if (node.latent.length > 0) return "latent";
+    return "leaf";
+  }
+  function iconColor(node, isRoot) {
+    if (node.provenance === "ai") return "var(--status-warning)";
+    if (node.provenance === "gap") return "var(--text-muted)";
+    return isRoot ? "var(--text-primary)" : "var(--text-secondary)";
+  }
+
+  function renderDots(node) {
+    var wrap = document.createElement("span");
+    wrap.className = "dots";
+    for (var i = 0; i < 5; i++) {
+      var d = document.createElement("button");
+      d.type = "button";
+      d.className = "dot" + (i < node.proficiency ? " filled" : "");
+      d.setAttribute("data-action", "dot");
+      d.setAttribute("data-id", node.id);
+      d.setAttribute("data-value", String(i + 1));
+      d.title = "Set proficiency to " + (i + 1) + "/5";
+      wrap.appendChild(d);
+    }
+    return wrap;
+  }
+
+  function renderRow(node, isRoot) {
+    var row = document.createElement("div");
+    row.className = "node-row" + (isRoot ? " is-root" : "") + (node.provenance === "ai" ? " prov-ai" : "") + (node.provenance === "gap" ? " prov-gap" : "");
+
+    var chevron = document.createElement("span");
+    if (node.children.length > 0) {
+      chevron.className = "chevron";
+      chevron.textContent = node.expanded ? "▾" : "▸";
+      chevron.setAttribute("data-action", "toggle");
+      chevron.setAttribute("data-id", node.id);
+      chevron.style.cursor = "pointer";
+    } else {
+      chevron.className = "chevron placeholder";
+      chevron.textContent = "▾";
+    }
+    row.appendChild(chevron);
+
+    var icon = document.createElement("span");
+    icon.className = "node-icon";
+    icon.innerHTML = ICONS[iconType(node, isRoot)];
+    icon.style.color = iconColor(node, isRoot);
+    row.appendChild(icon);
+
+    var label = document.createElement("span");
+    label.className = "label";
+    label.textContent = node.label;
+    row.appendChild(label);
+
+    if (node.latent.length > 0) {
+      var pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "break-pill";
+      pill.setAttribute("data-action", "break");
+      pill.setAttribute("data-id", node.id);
+      pill.textContent = "+" + node.latent.length + " hidden";
+      row.appendChild(pill);
+    }
+
+    row.appendChild(renderDots(node));
+
+    if (node.provenance === "ai") {
+      var chip = document.createElement("span");
+      chip.className = "chip chip-ai";
+      chip.textContent = "AI · needs review";
+      row.appendChild(chip);
+      var ok = document.createElement("button");
+      ok.className = "icon-btn"; ok.type = "button"; ok.title = "Confirm";
+      ok.setAttribute("data-action", "confirm"); ok.setAttribute("data-id", node.id);
+      ok.textContent = "✓";
+      row.appendChild(ok);
+      var no = document.createElement("button");
+      no.className = "icon-btn"; no.type = "button"; no.title = "Reject → mark as gap";
+      no.setAttribute("data-action", "reject"); no.setAttribute("data-id", node.id);
+      no.textContent = "✕";
+      row.appendChild(no);
+    } else if (node.provenance === "gap") {
+      var gchip = document.createElement("span");
+      gchip.className = "chip chip-gap";
+      gchip.textContent = "Known gap";
+      row.appendChild(gchip);
+    }
+
+    var actions = document.createElement("span");
+    actions.className = "row-actions";
+    var ren = document.createElement("button");
+    ren.className = "icon-btn"; ren.type = "button"; ren.title = "Rename";
+    ren.setAttribute("data-action", "rename"); ren.setAttribute("data-id", node.id);
+    ren.textContent = "✏️";
+    actions.appendChild(ren);
+    var add = document.createElement("button");
+    add.className = "icon-btn"; add.type = "button"; add.title = "Add child";
+    add.setAttribute("data-action", "addchild"); add.setAttribute("data-id", node.id);
+    add.textContent = "➕";
+    actions.appendChild(add);
+    var del = document.createElement("button");
+    del.className = "icon-btn"; del.type = "button";
+    del.title = isRoot ? "Remove this whole stack" : "Remove";
+    del.setAttribute("data-action", isRoot ? "deletestack" : "delete");
+    del.setAttribute("data-id", node.id);
+    del.textContent = "🗑";
+    actions.appendChild(del);
+    row.appendChild(actions);
+
+    return row;
+  }
+
+  function renderLi(node, lastBrokenId) {
+    var li = document.createElement("li");
+    li.appendChild(renderRow(node, false));
+    if (node.expanded && node.children.length > 0) {
+      var ul = document.createElement("ul");
+      ul.className = "tree" + (node.id === lastBrokenId ? " freshly-broken" : "");
+      node.children.forEach(function (c) { ul.appendChild(renderLi(c, lastBrokenId)); });
+      li.appendChild(ul);
+    }
+    return li;
+  }
+
+  // ---------------- per-forest instance (data + mutation + render) ----------------
+  function createForest(opts) {
+    var data = opts.initialData;
+    var lastBrokenId = null;
+
+    function findNode(id) {
+      var found = null;
+      function walk(list) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].id === id) { found = list[i]; return true; }
+          if (walk(list[i].children)) return true;
+          if (walk(list[i].latent)) return true;
+        }
+        return false;
+      }
+      walk(data);
+      return found;
+    }
+
+    function deleteNode(id) {
+      function recurse(list) {
+        var idx = -1;
+        for (var i = 0; i < list.length; i++) { if (list[i].id === id) { idx = i; break; } }
+        if (idx !== -1) { list.splice(idx, 1); return true; }
+        for (var j = 0; j < list.length; j++) {
+          if (recurse(list[j].children)) return true;
+          if (recurse(list[j].latent)) return true;
+        }
+        return false;
+      }
+      for (var k = 0; k < data.length; k++) {
+        if (recurse(data[k].children)) return;
+        if (recurse(data[k].latent)) return;
+      }
+    }
+
+    function deleteRoot(id) {
+      data = data.filter(function (n) { return n.id !== id; });
+    }
+
+    function setProficiency(id, value) {
+      var n = findNode(id);
+      if (!n) return;
+      n.proficiency = value;
+      n.provenance = "confirmed";
+    }
+    function confirmNode(id) {
+      var n = findNode(id);
+      if (!n) return;
+      n.provenance = "confirmed";
+      if (n.proficiency === 0) n.proficiency = 2;
+    }
+    function rejectNode(id) {
+      var n = findNode(id);
+      if (!n) return;
+      n.provenance = "gap";
+      n.proficiency = 0;
+    }
+    function breakLeaf(id) {
+      var n = findNode(id);
+      if (!n) return;
+      n.children = n.latent;
+      n.latent = [];
+      n.expanded = true;
+      lastBrokenId = id;
+    }
+    function toggleExpand(id) {
+      var n = findNode(id);
+      if (!n) return;
+      n.expanded = !n.expanded;
+    }
+    function renameNode(id) {
+      var n = findNode(id);
+      if (!n) return;
+      var v = window.prompt("Rename:", n.label);
+      if (v && v.trim()) n.label = v.trim();
+    }
+    function addChild(id) {
+      var n = findNode(id);
+      if (!n) return;
+      var v = window.prompt(opts.childPrompt);
+      if (!v || !v.trim()) return;
+      n.children.push(mkNode(v.trim(), "confirmed", 1));
+      n.expanded = true;
+    }
+    function addRoot() {
+      var v = window.prompt(opts.rootPrompt);
+      if (!v || !v.trim()) return;
+      data.push(mkNode(v.trim(), "confirmed", 1));
+    }
+
+    function updateSummary() {
+      var total = 0, ai = 0, gap = 0;
+      function walk(list) {
+        list.forEach(function (n) {
+          total++;
+          if (n.provenance === "ai") ai++;
+          else if (n.provenance === "gap") gap++;
+          walk(n.children);
+        });
+      }
+      walk(data);
+      document.getElementById(opts.summaryElId).textContent =
+        data.length + " " + opts.rootNoun + (data.length === 1 ? "" : "s") + " · " +
+        total + " " + opts.leafNoun + " tracked · " + ai + " need your review · " + gap + " declared gaps";
+    }
+
+    function render() {
+      var forestEl = document.getElementById(opts.forestElId);
+      forestEl.innerHTML = "";
+      data.forEach(function (root) {
+        var card = document.createElement("div");
+        card.className = "stack-card";
+        card.appendChild(renderRow(root, true));
+        if (root.expanded && root.children.length > 0) {
+          var ul = document.createElement("ul");
+          ul.className = "tree" + (root.id === lastBrokenId ? " freshly-broken" : "");
+          root.children.forEach(function (c) { ul.appendChild(renderLi(c, lastBrokenId)); });
+          card.appendChild(ul);
+        }
+        forestEl.appendChild(card);
+      });
+      updateSummary();
+      lastBrokenId = null;
+    }
+
+    document.getElementById(opts.forestElId).addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      var action = btn.getAttribute("data-action");
+      var id = btn.getAttribute("data-id");
+      if (action === "toggle") toggleExpand(id);
+      else if (action === "break") breakLeaf(id);
+      else if (action === "dot") setProficiency(id, Number(btn.getAttribute("data-value")));
+      else if (action === "rename") renameNode(id);
+      else if (action === "addchild") addChild(id);
+      else if (action === "confirm") confirmNode(id);
+      else if (action === "reject") rejectNode(id);
+      else if (action === "delete") { if (window.confirm("Remove this node and its children?")) deleteNode(id); }
+      else if (action === "deletestack") { if (window.confirm("Remove this entire " + opts.rootNoun + "?")) deleteRoot(id); }
+      render();
+    });
+
+    document.getElementById(opts.addBtnId).addEventListener("click", function () {
+      addRoot();
+      render();
+    });
+
+    render();
+  }
+
+  createForest({
+    forestElId: "forest-tech",
+    summaryElId: "summary-tech",
+    addBtnId: "addStackBtn-tech",
+    initialData: techForestData,
+    rootNoun: "tech stack",
+    leafNoun: "skills",
+    childPrompt: "New skill / framework name:",
+    rootPrompt: 'New tech stack name (e.g. "Infra — Terraform"):'
+  });
+
+  createForest({
+    forestElId: "forest-cs",
+    summaryElId: "summary-cs",
+    addBtnId: "addStackBtn-cs",
+    initialData: csForestData,
+    rootNoun: "concept area",
+    leafNoun: "concepts",
+    childPrompt: "New concept / topic name:",
+    rootPrompt: 'New concept area name (e.g. "Theory of Computation"):'
+  });
+
+  createForest({
+    forestElId: "forest-practice",
+    summaryElId: "summary-practice",
+    addBtnId: "addStackBtn-practice",
+    initialData: practiceForestData,
+    rootNoun: "practice area",
+    leafNoun: "practices",
+    childPrompt: "New practice / habit name:",
+    rootPrompt: 'New practice area name (e.g. "Documentation"):'
+  });
+
+  document.getElementById("themeSelect").addEventListener("change", function () {
+    document.documentElement.setAttribute("data-theme", this.value);
+  });
+
+  document.querySelectorAll(".legend .swatch[data-icon]").forEach(function (el) {
+    el.innerHTML = ICONS[el.getAttribute("data-icon")];
+    el.style.color = "var(--text-secondary)";
+  });
+})();
+</script>
+</body>
+</html>

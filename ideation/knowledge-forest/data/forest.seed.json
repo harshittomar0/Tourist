@@ -1,0 +1,214 @@
+{
+  "_comment": "Persisted schema deliberately omits `id` and `expanded` — those are UI-runtime concerns the loader assigns fresh on every load (see PLAN.md). This file is the same demo data hardcoded in ui/knowledge-forest.html, extracted here as the baseline the analyser's merge step operates against.",
+  "tech": [
+    {
+      "label": "Backend — Python",
+      "provenance": "confirmed",
+      "proficiency": 4,
+      "children": [
+        {
+          "label": "Django",
+          "provenance": "confirmed",
+          "proficiency": 4,
+          "children": [
+            { "label": "ORM & migrations", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+            { "label": "REST framework", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+            { "label": "Celery / async tasks", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] }
+          ],
+          "latent": []
+        },
+        {
+          "label": "Async / asyncio",
+          "provenance": "confirmed",
+          "proficiency": 3,
+          "children": [],
+          "latent": [
+            { "label": "Concurrency patterns", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "Race-condition debugging", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        },
+        { "label": "Testing (pytest)", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Kubernetes debugging", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Frontend — React",
+      "provenance": "confirmed",
+      "proficiency": 3,
+      "children": [
+        { "label": "Hooks", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+        { "label": "State management (Redux)", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        { "label": "Testing (RTL)", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] },
+        {
+          "label": "Rendering performance",
+          "provenance": "confirmed",
+          "proficiency": 2,
+          "children": [],
+          "latent": [
+            { "label": "Memoization strategy", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "List virtualization", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Infra — Docker/K8s",
+      "provenance": "ai",
+      "proficiency": 2,
+      "children": [
+        { "label": "Dockerfile authoring", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Kubernetes manifests", "provenance": "ai", "proficiency": 1, "children": [], "latent": [] },
+        { "label": "CI/CD pipelines", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+      ],
+      "latent": []
+    }
+  ],
+  "cs": [
+    {
+      "label": "Algorithms & Complexity",
+      "provenance": "confirmed",
+      "proficiency": 3,
+      "children": [
+        { "label": "Big-O / asymptotic analysis", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+        { "label": "Sorting & searching", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Dynamic programming", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        {
+          "label": "Graph algorithms (BFS/DFS, shortest path)",
+          "provenance": "confirmed",
+          "proficiency": 2,
+          "children": [],
+          "latent": [
+            { "label": "Advanced graph (Dijkstra, A*)", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "NP-completeness & reductions", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Data Structures",
+      "provenance": "confirmed",
+      "proficiency": 4,
+      "children": [
+        { "label": "Arrays & hashing", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+        { "label": "Trees & heaps", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Graphs", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Linked lists / stacks / queues", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Concurrency & Systems",
+      "provenance": "ai",
+      "proficiency": 2,
+      "children": [
+        { "label": "Threads & processes", "provenance": "confirmed", "proficiency": 2, "children": [], "latent": [] },
+        { "label": "Race conditions & locks", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        { "label": "Async / event loops", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Distributed systems basics (CAP, consistency)", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Architecture & Design",
+      "provenance": "confirmed",
+      "proficiency": 3,
+      "children": [
+        { "label": "Design patterns", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "SOLID principles", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        {
+          "label": "System design tradeoffs",
+          "provenance": "ai",
+          "proficiency": 2,
+          "children": [],
+          "latent": [
+            { "label": "Caching strategies", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "Scalability patterns", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Security Fundamentals",
+      "provenance": "gap",
+      "proficiency": 0,
+      "children": [
+        { "label": "OWASP top 10 / common vulns", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] },
+        { "label": "Cryptography basics", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] },
+        { "label": "AuthN/AuthZ concepts", "provenance": "ai", "proficiency": 1, "children": [], "latent": [] }
+      ],
+      "latent": []
+    }
+  ],
+  "practice": [
+    {
+      "label": "Code Quality & Craft",
+      "provenance": "confirmed",
+      "proficiency": 3,
+      "children": [
+        { "label": "Naming & readability", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+        { "label": "Structure & modularity", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Duplication / DRY discipline", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        {
+          "label": "Complexity management",
+          "provenance": "confirmed",
+          "proficiency": 2,
+          "children": [],
+          "latent": [
+            { "label": "Cyclomatic complexity awareness", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "Refactoring judgment", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Testing Discipline",
+      "provenance": "ai",
+      "proficiency": 2,
+      "children": [
+        { "label": "Unit test coverage habits", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Meaningful assertions", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Integration / e2e testing", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        { "label": "TDD practice", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Review & Collaboration",
+      "provenance": "confirmed",
+      "proficiency": 3,
+      "children": [
+        { "label": "Review feedback quality (given)", "provenance": "confirmed", "proficiency": 4, "children": [], "latent": [] },
+        { "label": "Responsiveness to feedback (received)", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "PR / commit hygiene", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+        {
+          "label": "Async communication",
+          "provenance": "confirmed",
+          "proficiency": 2,
+          "children": [],
+          "latent": [
+            { "label": "Documentation habits", "provenance": "ai", "proficiency": 2, "children": [], "latent": [] },
+            { "label": "Mentoring / knowledge sharing", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] }
+          ]
+        }
+      ],
+      "latent": []
+    },
+    {
+      "label": "Delivery & Ownership",
+      "provenance": "gap",
+      "proficiency": 0,
+      "children": [
+        { "label": "Bug / defect patterns", "provenance": "ai", "proficiency": 1, "children": [], "latent": [] },
+        { "label": "Debugging / root-causing", "provenance": "confirmed", "proficiency": 3, "children": [], "latent": [] },
+        { "label": "Estimation & planning accuracy", "provenance": "gap", "proficiency": 0, "children": [], "latent": [] },
+        { "label": "Incident ownership & response", "provenance": "ai", "proficiency": 1, "children": [], "latent": [] }
+      ],
+      "latent": []
+    }
+  ]
+}

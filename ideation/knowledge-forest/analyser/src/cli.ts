@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { getCommitDiff, listRecentCommits, repoRoot } from "./sources/gitSource.js";
+import { loadAttributionLog, partitionLinesByAuthor, attributionLogPath } from "./sources/attributionSource.js";
+import { getFileContentAtCommit } from "./sources/gitSource.js";
+import { listTranscriptFiles, readTranscript } from "./sources/promptSource.js";
+import { buildSystemPrompt, buildUserContent, truncateEvidence, type EvidenceItem } from "./claude/buildPrompt.js";
+import { createClaudeCaller } from "./claude/client.js";
+import { parseForestResponse } from "./forest/validate.js";
+import { mergeForest } from "./forest/merge.js";
+import type { ForestFile, ForestKind } from "./types.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+interface CliOptions {
+  repo: string;
+  since: string;
+  out: string;
+  forests: ForestKind[];
+  includePrompts: boolean;
+  dryRun: boolean;
+  maxCommits: number;
+  maxChars: number;
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  const opts: CliOptions = {
+    repo: process.cwd(),
+    since: "30 days ago",
+    out: path.join(__dirname, "..", "..", "data", "forest.json"),
+    forests: ["tech", "cs", "practice"],
+    includePrompts: false,
+    dryRun: false,
+    maxCommits: 20,
+    maxChars: 60_000
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const next = () => argv[++i];
+    switch (arg) {
+      case "--repo":
+        opts.repo = path.resolve(next());
+        break;
+      case "--since":
+        opts.since = next();
+        break;
+      case "--out":
+        opts.out = path.resolve(next());
+        break;
+      case "--forest":
+        opts.forests = next().split(",").filter(isForestKind);
+        break;
+      case "--include-prompts":
+        opts.includePrompts = true;
+        break;
+      case "--dry-run":
+        opts.dryRun = true;
+        break;
+      case "--max-commits":
+        opts.maxCommits = Number(next());
+        break;
+      case "--max-chars":
+        opts.maxChars = Number(next());
+        break;
+      default:
+        console.error(`Unknown argument: ${arg}`);
+        process.exit(1);
+    }
+  }
+  return opts;
+}
+
+function isForestKind(s: string): s is ForestKind {
+  return s === "tech" || s === "cs" || s === "practice";
+}
+
+function loadExistingForest(outPath: string): ForestFile {
+  try {
+    const raw = fs.readFileSync(outPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      tech: Array.isArray(parsed.tech) ? parsed.tech : [],
+      cs: Array.isArray(parsed.cs) ? parsed.cs : [],
+      practice: Array.isArray(parsed.practice) ? parsed.practice : []
+    };
+  } catch {
+    return { tech: [], cs: [], practice: [] };
+  }
+}
+
+function gatherGitEvidence(repo: string, since: string, maxCommits: number): EvidenceItem[] {
+  const attributionRecords = loadAttributionLog();
+  const commits = listRecentCommits(repo, since).slice(0, maxCommits);
+  const items: EvidenceItem[] = [];
+
+  for (const commit of commits) {
+    const diff = getCommitDiff(repo, commit.sha);
+    if (!diff.trim()) continue;
+
+    const attributionNotes: string[] = [];
+    for (const file of commit.files) {
+      const absPath = path.join(repo, file);
+      const content = getFileContentAtCommit(repo, commit.sha, file);
+      if (!content) continue;
+      const partition = partitionLinesByAuthor(attributionRecords, absPath, content);
+      if (partition.matched && partition.aiLines.length > 0) {
+        attributionNotes.push(
+          `${file}: ${partition.aiLines.length} of ${partition.aiLines.length + partition.humanLines.length} lines were Claude-Code-authored per tourist's attribution log — weight this file's evidence down accordingly, don't credit the person for those specific lines.`
+        );
+      }
+    }
+
+    items.push({
+      source: "git",
+      ref: commit.sha.slice(0, 12),
+      detail: [
+        `Commit ${commit.sha.slice(0, 12)} — "${commit.message}" — files: ${commit.files.join(", ")}`,
+        ...attributionNotes
+      ].join("\n"),
+      content: diff
+    });
+  }
+  return items;
+}
+
+function gatherPromptEvidence(repo: string): EvidenceItem[] {
+  const items: EvidenceItem[] = [];
+  for (const file of listTranscriptFiles(repo)) {
+    const turns = readTranscript(file).filter((t) => t.role === "user");
+    if (turns.length === 0) continue;
+    items.push({
+      source: "prompt",
+      ref: path.basename(file, ".jsonl"),
+      detail: `${turns.length} user prompts from a Claude Code session in this repo — signal for reasoning/intent, not for who wrote which line.`,
+      content: turns.map((t) => t.text).join("\n---\n")
+    });
+  }
+  return items;
+}
+
+async function main(): Promise<void> {
+  const opts = parseArgs(process.argv.slice(2));
+  const repo = repoRoot(opts.repo);
+
+  console.error(`Repo: ${repo}`);
+  console.error(`Attribution log: ${attributionLogPath()}`);
+  console.error(`Since: ${opts.since} | max commits: ${opts.maxCommits} | forests: ${opts.forests.join(",")}`);
+
+  const existing = loadExistingForest(opts.out);
+
+  let evidence = gatherGitEvidence(repo, opts.since, opts.maxCommits);
+  if (opts.includePrompts) {
+    evidence = evidence.concat(gatherPromptEvidence(repo));
+  }
+  evidence = truncateEvidence(evidence, opts.maxChars);
+  console.error(`Evidence items gathered: ${evidence.length}`);
+
+  const guidelinesPath = path.join(__dirname, "..", "..", "taxonomy-guidelines.md");
+  const guidelines = fs.readFileSync(guidelinesPath, "utf8");
+  const systemPrompt = buildSystemPrompt(guidelines);
+  const userContent = buildUserContent(opts.forests, evidence);
+
+  if (opts.dryRun) {
+    const promptOut = path.join(path.dirname(opts.out), "dry-run-prompt.txt");
+    fs.mkdirSync(path.dirname(promptOut), { recursive: true });
+    fs.writeFileSync(promptOut, `=== SYSTEM ===\n${systemPrompt}\n\n=== USER ===\n${userContent}\n`, "utf8");
+    console.error(`Dry run — no API call made. Prompt written to ${promptOut} (${systemPrompt.length + userContent.length} chars).`);
+    return;
+  }
+
+  const callClaude = createClaudeCaller();
+  const raw = await callClaude(systemPrompt, userContent);
+  const incoming = parseForestResponse(raw);
+  const merged = mergeForest(existing, incoming);
+
+  fs.mkdirSync(path.dirname(opts.out), { recursive: true });
+  fs.writeFileSync(opts.out, JSON.stringify(merged, null, 2) + "\n", "utf8");
+
+  const added = countNodes(incoming);
+  console.error(`Done. ${added} ai-provenance node(s) proposed this run. Wrote ${opts.out}.`);
+}
+
+function countNodes(forest: ForestFile): number {
+  const count = (nodes: { children: unknown[]; latent: unknown[] }[]): number =>
+    nodes.reduce((sum, n) => sum + 1 + count(n.children as never) + count(n.latent as never), 0);
+  return count(forest.tech as never) + count(forest.cs as never) + count(forest.practice as never);
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});

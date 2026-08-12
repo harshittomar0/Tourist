@@ -1,0 +1,25 @@
+{
+  "name": "knowledge-forest-analyser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spike: gathers git/attribution/prompt evidence for a repo, sends it to Claude with the knowledge-forest taxonomy guidelines, and merges the result into forest.json. Deliberately self-contained (own package.json/tsconfig) so it never touches tourist's own build — see ../PLAN.md for why this is a separate opt-in tool rather than part of the extension.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "cli": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
