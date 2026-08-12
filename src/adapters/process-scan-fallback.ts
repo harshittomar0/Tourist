@@ -9,20 +9,17 @@ import type { Disposable } from "../core/types.ts";
  * `cwd`/`cmd` matches a tracked workspace root. Only consulted by the tier
  * ladder when 2a and 2b both come back inactive.
  *
- * TODO(Phase 0 experiment 9, lowest priority per PLAN1.md's own ordering):
- * whether `ps-list` can actually correlate a running `claude` process to a
- * specific workspace path via `cwd`/`cmd` is unverified -- this adapter is
- * wired and best-effort-functional (matches on `cwd` when the library
- * reports it, falls back to a `cmd` substring match otherwise), but
- * RESEARCH1.md §2 Approach A explicitly flags this as fragile even on
- * macOS/Linux (launching from a parent dir, a monorepo subfolder, or
- * `--worktree`/`--add-dir` all break naive cwd matching) and *unusable* on
- * Windows (`cmd`/`cwd` aren't available there per `ps-list`'s own docs --
- * this adapter degrades to "never corroborates" on Windows by construction,
- * which is the documented, accepted v1 gap per GOAL1.md §2, not a bug).
- * Experiment 9 decides whether Tier 2c is worth shipping in v1 at all; if
- * not, the fix is to simply never call `start()` on this adapter from
- * extension.ts, not to change this file.
+ * Phase 0 experiment 9 (spike/FINDINGS.md) confirmed Tier 2c is worth
+ * shipping in v1 on macOS/Linux, with one concrete correction: `ps-list`
+ * does NOT expose a `cwd` field on macOS at all (contrary to this file's
+ * original assumption), so the `if (proc.cwd)` branch in `matchesWorkspace`
+ * below is effectively dead on darwin today and every match currently falls
+ * through to the weaker `cmd`-substring fallback. The confirmed fix is to
+ * pair `ps-list` with a supplementary `lsof -a -p <pid> -d cwd` call per
+ * candidate pid to resolve real cwd -- not yet implemented here; flagging
+ * as a follow-up rather than changing behavior in this comment-cleanup
+ * pass. The Windows gap (no `cmd`/`cwd` at all) is unchanged and remains
+ * the documented, accepted v1 limitation per GOAL1.md §2.
  */
 export interface ProcessScanFallbackOptions {
   pollIntervalMs?: number;

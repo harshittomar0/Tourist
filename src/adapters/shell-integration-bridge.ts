@@ -10,22 +10,18 @@ import type { Disposable } from "../core/types.ts";
  * real `vscode` module -- it lives in src/adapters/, not src/core/, so that
  * is allowed per the ownership rules (only src/core/ must stay vscode-free).
  *
- * TODO(Phase 0 experiment 3): this currently treats *any*
- * `commandLine.confidence` value as sufficient corroboration once the
- * command line starts with "claude" and `cwd` matches a tracked workspace
- * root. Experiment 3 determines whether `commandLine.confidence` is
- * reliably "high" for a real `claude` invocation across bash/zsh/fish/pwsh
- * on the actual target machines, or whether "Low"/"None"-confidence matches
- * should be excluded from corroboration (`MIN_CONFIDENCE` below is the one
- * line to change once that's known). It also determines how to positively
- * detect "shell integration isn't available at all here" (a `commandLine`
- * with `confidence` "none" or an execution's `commandLine.value` being
- * empty) versus "shell integration says no claude is running" -- this
- * adapter does not yet distinguish those two cases in its emitted signal;
- * downstream tier-classification currently treats "no signal" and "signal
- * says inactive" identically (both simply don't set `active: true`), which
- * is conservative-safe (never over-corroborates) but may under-corroborate
- * in the "unavailable" case. Revisit once experiment 3 lands.
+ * Phase 0 experiment 3 (spike/FINDINGS.md) confirmed real `claude`
+ * invocations report `commandLine.confidence: "High"` with exact
+ * `commandLine.value`/`cwd` on bash and zsh -- CONFIRMED for those two
+ * shells; fish/pwsh remain genuinely UNVERIFIED (not available to test),
+ * not contradicted. It also confirmed the positive "unavailable" signal:
+ * `terminal.shellIntegration` is reliably falsy/absent for a terminal that
+ * will never attach (tested on `sh`), distinct from "hasn't attached yet."
+ * This adapter still treats "no signal" and "signal says inactive"
+ * identically (both simply don't set `active: true`), which the finding's
+ * decision calls conservative-safe; distinguishing them by keying off
+ * `terminal.shellIntegration` directly remains a possible follow-up, not
+ * implemented in this pass (comment cleanup only).
  */
 const MIN_CONFIDENCE_ACCEPTED: readonly string[] = ["low", "medium", "high"];
 

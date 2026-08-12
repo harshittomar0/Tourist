@@ -22,10 +22,12 @@
 // schema drops tourist-raw's `snippet` field (this project has no
 // prompt-scoring feature to ground, so there's nothing that consumes it).
 //
-// TODO(Phase 0 experiment 4): confirm this hook still fires for
-// Edit/Write/MultiEdit on the current Claude Code CLI version, in both a
-// bare terminal and the VS Code extension's terminal, and specifically
-// under `--worktree` -- see src/adapters/hook-log-reader.ts's own TODO.
+// Phase 0 experiment 4 (spike/FINDINGS.md) confirmed the hook payload
+// schema and read/write contract, and found a real CLAUDE_CONFIG_DIR
+// path bug in this file (fixed in 44b325d). One sub-question remains
+// open: live dispatch under a real `claude` CLI session (bare terminal,
+// VS Code terminal, and specifically `--worktree`) was not independently
+// re-verified -- see src/adapters/hook-log-reader.ts's own note.
 //
 // This hook only records data as a side effect: it writes nothing to
 // stdout and always exits 0, so it can never block or disturb Claude Code.

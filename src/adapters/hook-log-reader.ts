@@ -79,16 +79,17 @@ function hasHookCommand(entries: ClaudeHookEntry[] | undefined, command: string)
  * per GOAL1.md §2, unlike tourist-raw's optional install) and reads back its
  * JSONL log for exact-match cross-checks.
  *
- * TODO(Phase 0 experiment 4): this assumes the current Claude Code hook
- * *configuration* schema (a `hooks.PreToolUse`/`hooks.PostToolUse` array of
- * `{matcher, hooks: [{type: "command", command}]}` entries in
- * `~/.claude/settings.json`) matches tourist-raw's existing, working
- * pattern verbatim, and that hooks still fire for Edit/Write/MultiEdit
- * (including under `--worktree`) on the current CLI version. If experiment
- * 4 finds the schema changed, `install()`/`readSettings()`/`hasHookCommand()`
- * below are the only things that need to change -- the read-path
- * (`matchesContent`/`matchesSpan`, keyed on the *log file* this hook script
- * writes, which we also own) is unaffected either way.
+ * Phase 0 experiment 4 (spike/FINDINGS.md) confirmed the hook config schema
+ * (`hooks.PreToolUse`/`hooks.PostToolUse` arrays of
+ * `{matcher, hooks: [{type: "command", command}]}` in
+ * `~/.claude/settings.json`) matches tourist-raw's pattern verbatim, so
+ * `install()`/`readSettings()`/`hasHookCommand()` below needed no schema
+ * changes. It also found a real `CLAUDE_CONFIG_DIR` bug in this file's
+ * `attributionDir()` (fixed in 44b325d). One sub-question remains open per
+ * the same experiment: live end-to-end hook dispatch under a real `claude`
+ * CLI session (especially `--worktree`) was not independently re-verified --
+ * a human-run smoke test is recommended before Tier 1 is trusted as ground
+ * truth in production.
  */
 export class FileHookLogReaderAdapter implements HookLogReaderAdapter {
   private cache: { mtimeMs: number; size: number; records: HookRecord[] } | null = null;

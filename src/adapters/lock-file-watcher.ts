@@ -47,16 +47,13 @@ function matchesWorkspace(workspaceRoot: string, workspaceFolders: string[] | un
 }
 
 /**
- * TODO(Phase 0 experiment 2): this currently corroborates on lock-file
- * *existence* alone, matched to a workspace by `workspaceFolders`
- * containment. Experiment 2 determines whether a stale lock left behind by
- * a `SIGKILL`'d Claude Code session survives long enough to falsely
- * over-corroborate Tier 2a after the session is actually gone, and if so,
- * whether a `pid`-liveness check (`process.kill(pid, 0)`, which throws
- * ESRCH if the pid is dead, on the same machine) needs to be layered on top.
- * `checkPidLiveness` below implements that check and is wired in but
- * defaults to *off* (`pidLivenessCheck: false`) until experiment 2 confirms
- * it's actually needed -- flipping it on is a one-line change once it is.
+ * Phase 0 experiment 2 (spike/FINDINGS.md) confirmed a stale lock file
+ * (dead pid) is NOT auto-removed -- existence alone is not a liveness
+ * signal -- so the `pidLivenessCheck` below is confirmed necessary, not
+ * merely speculative, and no additional staleness TTL is needed beyond it.
+ * NOTE: `pidLivenessCheck` still defaults to *off* below; flipping the
+ * default is a one-line change but is left as-is here since this pass is
+ * comment cleanup only, not a behavior change.
  */
 export interface LockFileWatcherOptions {
   pidLivenessCheck?: boolean;
