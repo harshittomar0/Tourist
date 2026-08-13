@@ -31,7 +31,8 @@ import { buildKnowledgeMapHtml, makeNonce } from "./html.ts";
 import { buildHookSetupBodyHtml, HOOK_SETUP_STYLE } from "./hook-setup-html.ts";
 import { resolveAnalyserPaths, type AnalyserPaths } from "./paths.ts";
 import { applyOverride, loadForest, loadMergeForest, saveForest } from "./store.ts";
-import type { WebviewToExtensionMessage } from "./types.ts";
+import { emptyForest } from "./types.ts";
+import type { ForestFile, WebviewToExtensionMessage } from "./types.ts";
 
 export interface DashboardPanelDeps {
   /** Runs a deep-dive analyser pass on the given topic labels (delegates to
@@ -105,44 +106,57 @@ export async function showDashboardPanel(
   messageListener = currentPanel.webview.onDidReceiveMessage(async (message: WebviewToExtensionMessage) => {
     if (!currentPanel) return;
 
-    if (message?.type === "themeChanged") {
-      currentTheme = message.theme;
-      return;
-    }
+    // VS Code's webview message API does not surface a rejected promise
+    // from this callback anywhere -- an uncaught throw here (e.g.
+    // saveForest's unguarded fs.writeFileSync hitting a full disk or a
+    // permissions error) would otherwise leave the user with a click that
+    // silently "does nothing." Catch everything and report it explicitly.
+    try {
+      if (message?.type === "themeChanged") {
+        currentTheme = message.theme;
+        return;
+      }
 
-    if (message?.type === "switchTab") {
-      currentTab = nextDashboardTab(currentTab, message.tab);
-      await render(currentPanel, paths, deps);
-      return;
-    }
+      if (message?.type === "switchTab") {
+        currentTab = nextDashboardTab(currentTab, message.tab);
+        await render(currentPanel, paths, deps);
+        return;
+      }
 
-    if (message?.type === "dashboardAction") {
-      await handleDashboardAction(message.action);
-      await render(currentPanel, paths, deps);
-      return;
-    }
+      if (message?.type === "dashboardAction") {
+        await handleDashboardAction(message.action);
+        await render(currentPanel, paths, deps);
+        return;
+      }
 
-    if (message?.type === "nodeOverride") {
-      const forest = loadForest(paths.forestJsonPath);
-      const result = applyOverride(forest, message, merge);
-      if (result.changed) {
-        saveForest(paths.forestJsonPath, result.forest);
+      if (message?.type === "nodeOverride") {
+        const forest = loadForest(paths.forestJsonPath);
+        const result = applyOverride(forest, message, merge);
+        if (result.error) {
+          vscode.window.showWarningMessage(`Tourist: ${result.error}`);
+          return;
+        }
+        if (result.changed) {
+          saveForest(paths.forestJsonPath, result.forest);
+          await render(currentPanel, paths, deps);
+        }
+        return;
+      }
+
+      if (message?.type === "deepDive") {
+        if (!message.topics || message.topics.length === 0) return;
+        await deps.onDeepDive(message.topics);
+        await render(currentPanel, paths, deps);
+        return;
+      }
+
+      if (message?.type === "reopenNode") {
+        if (!message.topic) return;
+        await deps.onReopen(message.topic);
         await render(currentPanel, paths, deps);
       }
-      return;
-    }
-
-    if (message?.type === "deepDive") {
-      if (!message.topics || message.topics.length === 0) return;
-      await deps.onDeepDive(message.topics);
-      await render(currentPanel, paths, deps);
-      return;
-    }
-
-    if (message?.type === "reopenNode") {
-      if (!message.topic) return;
-      await deps.onReopen(message.topic);
-      await render(currentPanel, paths, deps);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Tourist: Knowledge Map action failed: ${(err as Error).message}`);
     }
   });
 }
@@ -206,10 +220,28 @@ async function render(panel: vscode.WebviewPanel, paths: AnalyserPaths, deps: Da
   }
 
   const rawHtml = fs.readFileSync(paths.htmlPath, "utf8");
-  const forest = loadForest(paths.forestJsonPath);
+  const forest = loadForestOrWarn(paths.forestJsonPath);
   const nonce = makeNonce();
   const html = buildKnowledgeMapHtml(rawHtml, forest, panel.webview.cspSource, currentTheme, nonce);
   panel.webview.html = injectDashboardChrome(html, currentTab, nonce);
+}
+
+/** `loadForest` throws when `forestJsonPath` exists but failed to parse (see
+ * store.ts) -- a real problem distinct from "no forest.json yet". `render`
+ * runs both on initial panel open and after every webview action, so rather
+ * than aborting the whole panel over a corrupted file, this surfaces a
+ * one-time warning and falls back to an empty forest for display purposes
+ * only (the corrupted file on disk is left untouched -- nothing here saves
+ * over it). */
+function loadForestOrWarn(forestJsonPath: string): ForestFile {
+  try {
+    return loadForest(forestJsonPath);
+  } catch (err) {
+    vscode.window.showWarningMessage(
+      `Tourist: couldn't read your knowledge map data (${(err as Error).message}). Showing an empty map instead of overwriting anything.`
+    );
+    return emptyForest();
+  }
 }
 
 /** Test-only seam: the module-level singleton means tests can't otherwise

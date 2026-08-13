@@ -9,17 +9,33 @@ import { pathToFileURL } from "node:url";
 import type { ForestFile, ForestKind, ForestNode, NodeOverrideMessage, Provenance } from "./types.ts";
 import { emptyForest } from "./types.ts";
 
+/**
+ * Distinguishes "no forest.json yet" (expected on first run -- returns an
+ * empty forest) from "forest.json exists but couldn't be read/parsed" (a
+ * real problem -- e.g. a previous write got killed mid-file, or a merge
+ * conflict landed in the file). The latter throws instead of silently
+ * discarding whatever data is actually on disk; callers that need to
+ * degrade gracefully in the UI (see panel.ts) catch this and surface a
+ * warning rather than quietly showing an empty map as if nothing were
+ * wrong.
+ */
 export function loadForest(forestJsonPath: string): ForestFile {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(forestJsonPath, "utf8");
+    raw = fs.readFileSync(forestJsonPath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return emptyForest();
+    throw err;
+  }
+  try {
     const parsed = JSON.parse(raw) as Partial<ForestFile>;
     return {
       tech: Array.isArray(parsed.tech) ? parsed.tech : [],
       cs: Array.isArray(parsed.cs) ? parsed.cs : [],
       practice: Array.isArray(parsed.practice) ? parsed.practice : [],
     };
-  } catch {
-    return emptyForest();
+  } catch (err) {
+    throw new Error(`forest.json at ${forestJsonPath} is not valid JSON: ${(err as Error).message}`);
   }
 }
 
@@ -93,6 +109,22 @@ export interface ApplyResult {
   forest: ForestFile;
   changed: boolean;
   usedMerge: boolean;
+  /** Set instead of applying the edit when the requested change was rejected
+   * as invalid (e.g. a duplicate sibling label) rather than merely
+   * unresolvable -- see applyOverride's addChild/rename branches. Callers
+   * (panel.ts) surface this to the user instead of silently no-oping. */
+  error?: string;
+}
+
+/** True if `list` already has a node with `label`, other than the node at
+ * `excludeIndex` (used by rename, which is renaming a node already in the
+ * list). Node identity within a single level is label-based throughout this
+ * codebase (findByPath, mergeNodeList, containsChain all match siblings by
+ * label alone), so this is the one gate that keeps that assumption valid:
+ * without it, a user could create two same-labeled siblings from the UI and
+ * every one of those label-lookups would silently act on the wrong node. */
+function hasSiblingWithLabel(list: ForestNode[], label: string, excludeIndex?: number): boolean {
+  return list.some((n, i) => n.label === label && i !== excludeIndex);
 }
 
 /**
@@ -124,10 +156,16 @@ export function applyOverride(forest: ForestFile, msg: NodeOverrideMessage, merg
     if (!label) return { forest, changed: false, usedMerge: false };
     const newNode: ForestNode = { label, provenance: "confirmed", proficiency: 1, children: [], latent: [] };
     if (msg.path.length === 0) {
+      if (hasSiblingWithLabel(roots, label)) {
+        return { forest, changed: false, usedMerge: false, error: `"${label}" already exists at the top level.` };
+      }
       roots.push(newNode);
     } else {
       const parent = findByPath(roots, msg.path);
       if (!parent) return { forest, changed: false, usedMerge: false };
+      if (hasSiblingWithLabel(parent.children, label)) {
+        return { forest, changed: false, usedMerge: false, error: `"${label}" already exists under "${parent.label}".` };
+      }
       parent.children.push(newNode);
     }
     return { forest, changed: true, usedMerge: false };
@@ -143,7 +181,11 @@ export function applyOverride(forest: ForestFile, msg: NodeOverrideMessage, merg
   if (msg.action === "rename") {
     const target = findByPath(roots, msg.path);
     const newLabel = String(msg.value ?? "").trim();
-    if (!target || !newLabel) return { forest, changed: false, usedMerge: false };
+    if (!target || !newLabel || newLabel === target.label) return { forest, changed: false, usedMerge: false };
+    const loc = findParentList(roots, msg.path);
+    if (loc && hasSiblingWithLabel(loc.list, newLabel, loc.index)) {
+      return { forest, changed: false, usedMerge: false, error: `"${newLabel}" already exists at this level.` };
+    }
     target.label = newLabel;
     return { forest, changed: true, usedMerge: false };
   }
