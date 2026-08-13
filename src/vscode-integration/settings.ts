@@ -82,6 +82,29 @@ export function knowledgeMapModel(): string {
   return config().get<string>("knowledgeMap.model", "claude-sonnet-5");
 }
 
+export function knowledgeMapSince(): string {
+  return config().get<string>("knowledgeMap.since", "30 days ago");
+}
+
+export function knowledgeMapMaxCommits(): number {
+  return config().get<number>("knowledgeMap.maxCommits", 20);
+}
+
+export type KnowledgeMapForestKind = "tech" | "cs" | "practice";
+
+export function knowledgeMapForestKinds(): KnowledgeMapForestKind[] {
+  return config().get<KnowledgeMapForestKind[]>("knowledgeMap.forestKinds", ["tech", "cs", "practice"]);
+}
+
+/** Off by default -- see cli.ts's own `--include-prompts` header comment.
+ * Reads raw Claude Code session transcripts (actual prompts, not just
+ * code) as extra Knowledge Map evidence. More privacy-sensitive than git
+ * history, so this gets its own explicit consent dialog in commands.ts
+ * rather than being folded into the generic Knowledge Map consent. */
+export function knowledgeMapIncludePrompts(): boolean {
+  return config().get<boolean>("knowledgeMap.includePrompts", false);
+}
+
 export const RELEVANT_CONFIG_KEYS = [
   "tourist.attributionTracking",
   "tourist.showAttributionMarkers",
@@ -93,6 +116,10 @@ export const RELEVANT_CONFIG_KEYS = [
   "tourist.knowledgeMap.claudeBackend",
   "tourist.knowledgeMap.claudeCliPath",
   "tourist.knowledgeMap.model",
+  "tourist.knowledgeMap.since",
+  "tourist.knowledgeMap.maxCommits",
+  "tourist.knowledgeMap.forestKinds",
+  "tourist.knowledgeMap.includePrompts",
 ] as const;
 
 export function affectsTouristConfig(event: vscode.ConfigurationChangeEvent): boolean {

@@ -32,5 +32,24 @@ describe("package.json contributes -- Knowledge Map", () => {
     });
     expect(props["tourist.knowledgeMap.claudeCliPath"]).toMatchObject({ type: "string", default: "claude" });
     expect(props["tourist.knowledgeMap.model"]).toMatchObject({ type: "string", default: "claude-sonnet-5" });
+    expect(props["tourist.knowledgeMap.since"]).toMatchObject({ type: "string", default: "30 days ago" });
+    expect(props["tourist.knowledgeMap.maxCommits"]).toMatchObject({ type: "number", default: 20 });
+    expect(props["tourist.knowledgeMap.forestKinds"]).toMatchObject({
+      type: "array",
+      default: ["tech", "cs", "practice"],
+    });
+    expect(props["tourist.knowledgeMap.forestKinds"].items).toMatchObject({
+      enum: ["tech", "cs", "practice"],
+    });
+  });
+
+  it("declares tourist.knowledgeMap.includePrompts as opt-in and off by default", () => {
+    const props = pkg.contributes.configuration.properties;
+    expect(props["tourist.knowledgeMap.includePrompts"]).toMatchObject({ type: "boolean", default: false });
+    // The whole point of this setting is that it's more sensitive than
+    // plain git history -- the description must say so, not bury it in
+    // generic wording (see commands.ts's dedicated consent dialog).
+    expect(props["tourist.knowledgeMap.includePrompts"].description).toMatch(/session transcripts|prompts/i);
+    expect(props["tourist.knowledgeMap.includePrompts"].description).toMatch(/sensitive/i);
   });
 });

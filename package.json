@@ -115,6 +115,30 @@
           "type": "string",
           "default": "claude-sonnet-5",
           "description": "Claude model used for Knowledge Map analysis."
+        },
+        "tourist.knowledgeMap.since": {
+          "type": "string",
+          "default": "30 days ago",
+          "description": "How far back to look for git history when generating a Knowledge Map (anything `git log --since` accepts, e.g. \"30 days ago\" or \"2026-06-01\")."
+        },
+        "tourist.knowledgeMap.maxCommits": {
+          "type": "number",
+          "default": 20,
+          "description": "Cap on the number of recent commits considered as evidence for a Knowledge Map. Lower this to reduce cost/time; raise it for a deeper but slower and more expensive pass."
+        },
+        "tourist.knowledgeMap.forestKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["tech", "cs", "practice"]
+          },
+          "default": ["tech", "cs", "practice"],
+          "description": "Which of the three Knowledge Map forests (Tech Stacks, CS Fundamentals, Engineering Practice) to classify evidence into. Defaults to all three."
+        },
+        "tourist.knowledgeMap.includePrompts": {
+          "type": "boolean",
+          "default": false,
+          "description": "Off by default. When on, also reads your real Claude Code session transcripts (the actual prompts/questions you typed in this repo, not just code) as extra Knowledge Map evidence. This is more privacy-sensitive than git history alone -- turning it on shows a separate, explicit consent dialog before the next Knowledge Map generation."
         }
       }
     },
