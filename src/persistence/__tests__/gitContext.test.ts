@@ -132,3 +132,46 @@ describe("resolveGitContext with an injected vscode.git API", () => {
     }
   });
 });
+
+describe("resolveGitContext repositories-list fallback (sibling-repo boundary)", () => {
+  // `api.getRepository` returning nothing forces resolution through the
+  // longest-prefix loop over `api.repositories` -- the code path that used
+  // to do a plain string-prefix `startsWith` match with no separator
+  // boundary check.
+  function fakeApiWithRepos(repoRoots: string[]): VscodeGitAPI {
+    return {
+      repositories: repoRoots.map((fsPath) => ({
+        rootUri: { fsPath },
+        state: { HEAD: { name: "main" }, onDidChange: () => ({ dispose() {} }) }
+      })),
+      onDidOpenRepository: () => ({ dispose() {} }),
+      getRepository: () => null
+    };
+  }
+
+  it("does not match a sibling repo whose root is only a string-prefix of the file path", async () => {
+    const fakeApi = fakeApiWithRepos(["/work/app"]);
+    // /work/app-legacy is a sibling of /work/app, not nested inside it --
+    // a plain `startsWith("/work/app")` would incorrectly match it.
+    const ctx = await resolveGitContext("/work/app-legacy/src/file.ts", fakeApi);
+    expect(ctx).toBeUndefined();
+  });
+
+  it("still matches a file genuinely nested under a repo root", async () => {
+    const fakeApi = fakeApiWithRepos(["/work/app"]);
+    const ctx = await resolveGitContext("/work/app/src/file.ts", fakeApi);
+    expect(ctx).toEqual({ repoRoot: "/work/app", branch: "main" });
+  });
+
+  it("matches when the file path is exactly the repo root", async () => {
+    const fakeApi = fakeApiWithRepos(["/work/app"]);
+    const ctx = await resolveGitContext("/work/app", fakeApi);
+    expect(ctx).toEqual({ repoRoot: "/work/app", branch: "main" });
+  });
+
+  it("picks the longest matching repo root among nested repos, without picking up a sibling", async () => {
+    const fakeApi = fakeApiWithRepos(["/work/app", "/work/app/vendor/nested-repo", "/work/app-legacy"]);
+    const ctx = await resolveGitContext("/work/app/vendor/nested-repo/file.ts", fakeApi);
+    expect(ctx).toEqual({ repoRoot: "/work/app/vendor/nested-repo", branch: "main" });
+  });
+});
