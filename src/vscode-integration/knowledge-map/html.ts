@@ -316,8 +316,15 @@ function buildOverrideBridgeSource(provenanceIndexJson: string): string {
         reopenBtn.textContent = "\u{1F501}";
         reopenBtn.addEventListener("click", function (ev) {
           ev.stopPropagation();
-          var label = path[path.length - 1];
-          if (label) post({ type: "reopenNode", topic: label });
+          // Send the FULL root-to-node ancestor path (">"-joined, same chain
+          // syntax --deep-dive/--reopen already parse -- see
+          // forest/deepDive.ts's resolveDeepDiveTopics), not just the bare
+          // label. forest/merge.ts's mergeNodeList matches --reopen targets
+          // against the full ancestor path built during tree traversal, so a
+          // bare label only ever matches a root-level node -- for any nested
+          // node (e.g. "ORM & migrations" under "Django") it silently
+          // matches nothing and the re-review request is a no-op.
+          post({ type: "reopenNode", topic: path.join(" > ") });
         });
         var actionsEl = row.querySelector(".row-actions");
         if (actionsEl) actionsEl.appendChild(reopenBtn);

@@ -259,7 +259,7 @@ describe("Re-review affordance (confirmed/gap nodes only)", () => {
     expect(findRowByLabel(document, "Rust")?.querySelector(".km-reopen-btn")).toBeNull();
   });
 
-  it("posts a reopenNode message with the node's bare label when clicked", async () => {
+  it("posts a reopenNode message with the node's full ancestor path when clicked (a root node's path is just its own label)", async () => {
     const { document, messages } = renderWithMixedProvenance();
     await new Promise((r) => setTimeout(r, 20));
 
@@ -268,5 +268,53 @@ describe("Re-review affordance (confirmed/gap nodes only)", () => {
     btn.click();
 
     expect(messages).toContainEqual({ type: "reopenNode", topic: "Django" });
+  });
+
+  // Regression: html.ts used to send only the node's bare label
+  // (`path[path.length - 1]`), but forest/merge.ts's mergeNodeList matches
+  // --reopen targets against the FULL root-to-node ancestor path built
+  // during tree traversal. For any node that isn't at the forest root, a
+  // bare label silently matched nothing and the re-review request was a
+  // no-op -- this test fails before the fix (topic would be
+  // "ORM & migrations") and passes after (topic is
+  // "Django > ORM & migrations").
+  it("posts the full ancestor path (not just the bare label) when re-reviewing a nested confirmed/gap node", async () => {
+    const raw = readFileSync(REAL_TEMPLATE_PATH, "utf8");
+    const forest: ForestFile = {
+      tech: [
+        {
+          label: "Django",
+          provenance: "confirmed",
+          proficiency: 4,
+          children: [
+            { label: "ORM & migrations", provenance: "confirmed", proficiency: 3, children: [], latent: [] },
+          ],
+          latent: [],
+        },
+      ],
+      cs: [],
+      practice: [],
+    };
+    const html = buildKnowledgeMapHtml(raw, forest, "vscode-webview://source");
+    const messages: unknown[] = [];
+    const dom = new JSDOM(html, {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
+          postMessage: (msg: unknown) => messages.push(msg),
+          getState: () => undefined,
+          setState: () => {},
+        });
+      },
+    });
+    const document = dom.window.document;
+    await new Promise((r) => setTimeout(r, 20));
+
+    const btn = findRowByLabel(document, "ORM & migrations")?.querySelector(".km-reopen-btn") as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+
+    expect(messages).toContainEqual({ type: "reopenNode", topic: "Django > ORM & migrations" });
   });
 });

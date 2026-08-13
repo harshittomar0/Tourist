@@ -182,6 +182,60 @@ describe("mergeForest", () => {
     expect(afterSecondRun.tech[0]).toMatchObject({ provenance: "confirmed", proficiency: 1 });
   });
 
+  // Regression for the vscode-integration/knowledge-map "Re-review" bug:
+  // reopenKeys are built from the FULL root-to-node ancestor path
+  // (`reopenKey(kind, path)` where `path` is `[...parentPath, label]`), not
+  // the node's bare label. A reopen target carrying only the bare label of a
+  // nested node never matches, so the confirmed/gap node stays frozen -- a
+  // silent no-op. This is exactly what html.ts's pre-fix bug sent.
+  it("reopens a nested confirmed node only when the reopen target carries its full ancestor path, not just its bare label", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [
+        node({
+          label: "Django",
+          provenance: "confirmed",
+          proficiency: 4,
+          children: [node({ label: "ORM & migrations", provenance: "confirmed", proficiency: 2, evidence: [] })]
+        })
+      ]
+    };
+    const incoming: ForestFile = {
+      ...empty(),
+      tech: [
+        node({
+          label: "Django",
+          provenance: "ai",
+          proficiency: 1,
+          children: [
+            node({
+              label: "ORM & migrations",
+              provenance: "ai",
+              proficiency: 5,
+              evidence: [{ source: "git", ref: "abc123", detail: "new migration files" }]
+            })
+          ]
+        })
+      ]
+    };
+
+    // Bare label only -- what html.ts used to send. Doesn't match the
+    // nested node's real key ("tech:Django>ORM & migrations"), so it's a
+    // silent no-op.
+    const withBareLabel = mergeForest(existing, incoming, [{ forestKind: "tech", path: ["ORM & migrations"] }]);
+    const ormBare = withBareLabel.tech[0].children.find((n) => n.label === "ORM & migrations")!;
+    expect(ormBare.proficiency).toBe(2);
+    expect(ormBare.provenance).toBe("confirmed");
+
+    // Full ancestor path -- what html.ts sends after the fix. Matches and
+    // reopens the node for this call only.
+    const withFullPath = mergeForest(existing, incoming, [{ forestKind: "tech", path: ["Django", "ORM & migrations"] }]);
+    const ormFull = withFullPath.tech[0].children.find((n) => n.label === "ORM & migrations")!;
+    expect(ormFull.proficiency).toBe(5);
+    expect(ormFull.provenance).toBe("confirmed"); // never rewritten to "tracked"
+    expect(ormFull.evidence).toEqual([{ source: "git", ref: "abc123", detail: "new migration files" }]);
+  });
+
   it("recurses into a confirmed parent's children so new sub-nodes can still be proposed", () => {
     const existing: ForestFile = {
       ...empty(),
