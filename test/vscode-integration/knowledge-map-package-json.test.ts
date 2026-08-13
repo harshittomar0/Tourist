@@ -7,7 +7,7 @@
  * registered/declared" intent the task asked for, at the one boundary that
  * *is* plain data: package.json's contributes block.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -51,5 +51,41 @@ describe("package.json contributes -- Knowledge Map", () => {
     // generic wording (see commands.ts's dedicated consent dialog).
     expect(props["tourist.knowledgeMap.includePrompts"].description).toMatch(/session transcripts|prompts/i);
     expect(props["tourist.knowledgeMap.includePrompts"].description).toMatch(/sensitive/i);
+  });
+});
+
+describe("package.json contributes -- UI consolidation (Phases 0-2)", () => {
+  it("declares a 'Tourist' Activity Bar container with a local icon file (not a codicon reference)", () => {
+    const containers = pkg.contributes.viewsContainers?.activitybar ?? [];
+    const tourist = containers.find((c: { id: string }) => c.id === "tourist");
+    expect(tourist).toBeDefined();
+    expect(tourist.title).toBe("Tourist");
+    // Activity Bar container icons must be an on-disk image (SVG), not
+    // ThemeIcon `$(...)` syntax -- unlike command/view icons, VS Code
+    // doesn't accept codicon references here.
+    expect(tourist.icon).not.toMatch(/^\$\(/);
+    expect(existsSync(path.join(__dirname, "..", "..", tourist.icon))).toBe(true);
+  });
+
+  it("moves tourist.workspaceAttribution out of views.explorer and into views.tourist", () => {
+    expect(pkg.contributes.views.explorer).toBeUndefined();
+    const touristViews = pkg.contributes.views.tourist;
+    expect(touristViews).toBeDefined();
+    const ids = touristViews.map((v: { id: string }) => v.id);
+    expect(ids).toContain("tourist.workspaceAttribution");
+  });
+
+  it("declares tourist.status as a webview view in the tourist container", () => {
+    const touristViews = pkg.contributes.views.tourist;
+    const status = touristViews.find((v: { id: string }) => v.id === "tourist.status");
+    expect(status).toBeDefined();
+    expect(status.type).toBe("webview");
+  });
+
+  it("keeps tourist.openMenu registered unchanged for backward compatibility", () => {
+    const commandIds = pkg.contributes.commands.map((c: { command: string }) => c.command);
+    expect(commandIds).toContain("tourist.openMenu");
+    const editorTitleMenu = pkg.contributes.menus["editor/title"];
+    expect(editorTitleMenu.some((m: { command: string }) => m.command === "tourist.openMenu")).toBe(true);
   });
 });
