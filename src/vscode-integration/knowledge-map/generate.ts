@@ -3,13 +3,17 @@
  * `vscode` import -- pure enough to unit test without an extension host.
  *
  * The flag set below (`--claude-backend`/`--claude-cli-path`/`--model`/
- * `--deep-dive`) matches ideation/knowledge-forest/analyser/src/cli.ts's
- * real, landed interface. Note `--out` (not `--forest`) is the output-path
- * flag -- cli.ts's own `--forest` takes a comma-separated list of forest
- * *kinds* (tech/cs/practice), a different thing entirely; passing a JSON
- * path there silently filters down to zero kinds instead of erroring.
+ * `--since`/`--max-commits`/`--forest`/`--include-prompts`/`--deep-dive`)
+ * matches ideation/knowledge-forest/analyser/src/cli.ts's real, landed
+ * interface. Note `--out` (not `--forest`) is the output-path flag --
+ * cli.ts's own `--forest` takes a comma-separated list of forest *kinds*
+ * (tech/cs/practice), a different thing entirely; passing a JSON path
+ * there silently filters down to zero kinds instead of erroring.
  * `looksLikeUnsupportedFlags` stays as a defensive check for a stale local
  * analyser build (built before a future flag change) rather than a crash.
+ *
+ * `--max-chars` and `--dry-run` are deliberately not surfaced here -- see
+ * the audit report for why those two stay CLI-only.
  */
 import { spawn } from "node:child_process";
 
@@ -19,6 +23,13 @@ export interface GenerateOptions {
   claudeBackend: "cli" | "api-key";
   claudeCliPath: string;
   model: string;
+  since: string;
+  maxCommits: number;
+  forestKinds: string[];
+  /** Opt-in, privacy-sensitive: reads real Claude Code session transcripts
+   * as extra evidence. See settings.ts's `knowledgeMapIncludePrompts` and
+   * commands.ts's dedicated consent dialog for this flag specifically. */
+  includePrompts: boolean;
   /** Topic labels the user selected in the webview for a deep-dive pass --
    * see html.ts's "Deep Dive on Selected" affordance. Omitted/empty for a
    * normal whole-forest generate. */
@@ -31,6 +42,12 @@ export function buildAnalyserArgs(opts: GenerateOptions): string[] {
     opts.repoRoot,
     "--out",
     opts.forestJsonPath,
+    "--since",
+    opts.since,
+    "--max-commits",
+    String(opts.maxCommits),
+    "--forest",
+    opts.forestKinds.join(","),
     "--claude-backend",
     opts.claudeBackend,
     "--claude-cli-path",
@@ -38,6 +55,9 @@ export function buildAnalyserArgs(opts: GenerateOptions): string[] {
     "--model",
     opts.model,
   ];
+  if (opts.includePrompts) {
+    args.push("--include-prompts");
+  }
   if (opts.deepDiveTopics && opts.deepDiveTopics.length > 0) {
     args.push("--deep-dive", opts.deepDiveTopics.join(","));
   }

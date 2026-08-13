@@ -14,6 +14,12 @@ import { resolveAnalyserPaths } from "./paths.ts";
 import { showKnowledgeMapPanel } from "./panel.ts";
 
 const CONSENT_KEY = "tourist.knowledgeMap.consented";
+/** Separate one-time consent gate for `--include-prompts` specifically --
+ * it sends raw Claude Code conversation history, not just code, so it gets
+ * its own explicit dialog rather than being folded into CONSENT_KEY's
+ * generic wording. Re-asked if the setting is ever turned on after the
+ * user already consented to the generic gate. */
+const PROMPTS_CONSENT_KEY = "tourist.knowledgeMap.promptsConsented";
 const API_KEY_SECRET = "tourist.knowledgeMap.anthropicApiKey";
 
 export function registerKnowledgeMapCommands(context: vscode.ExtensionContext): void {
@@ -53,13 +59,28 @@ export async function runGenerateKnowledgeMap(context: vscode.ExtensionContext, 
   const consented = context.globalState.get<boolean>(CONSENT_KEY, false);
   if (!consented) {
     const choice = await vscode.window.showWarningMessage(
-      `Tourist: Generating a Knowledge Map sends evidence from this repo (recent git diffs, commit messages, and -- only if you separately opt into "--include-prompts" -- Claude Code prompt history) to Claude, via the "${backend}" backend configured in Settings. Continue?`,
+      `Tourist: Generating a Knowledge Map sends evidence from this repo (recent git diffs and commit messages) to Claude, via the "${backend}" backend configured in Settings. Continue?`,
       { modal: true },
       "Confirm",
       "Cancel"
     );
     if (choice !== "Confirm") return;
     await context.globalState.update(CONSENT_KEY, true);
+  }
+
+  const includePrompts = settings.knowledgeMapIncludePrompts();
+  if (includePrompts) {
+    const promptsConsented = context.globalState.get<boolean>(PROMPTS_CONSENT_KEY, false);
+    if (!promptsConsented) {
+      const choice = await vscode.window.showWarningMessage(
+        `Tourist: "tourist.knowledgeMap.includePrompts" is on. In addition to git diffs and commit messages, this will send the raw text of your Claude Code conversation history in this repo -- the actual prompts and questions you typed, not just code -- to Claude. This is more sensitive than plain git history. Continue?`,
+        { modal: true },
+        "Confirm",
+        "Cancel"
+      );
+      if (choice !== "Confirm") return;
+      await context.globalState.update(PROMPTS_CONSENT_KEY, true);
+    }
   }
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -97,6 +118,10 @@ export async function runGenerateKnowledgeMap(context: vscode.ExtensionContext, 
     claudeBackend: backend,
     claudeCliPath: settings.knowledgeMapClaudeCliPath(),
     model: settings.knowledgeMapModel(),
+    since: settings.knowledgeMapSince(),
+    maxCommits: settings.knowledgeMapMaxCommits(),
+    forestKinds: settings.knowledgeMapForestKinds(),
+    includePrompts,
     deepDiveTopics: opts.deepDiveTopics,
   });
 
