@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { RepoBranchKey } from "./types.js";
 import type { VscodeGitAPI, VscodeGitRepository } from "./vscodeGitTypes.js";
 
@@ -103,7 +103,12 @@ function repositoryForFile(api: VscodeGitAPI, fileFsPath: string): VscodeGitRepo
   // fall back to a longest-prefix match over open repositories.
   let best: VscodeGitRepository | undefined;
   for (const repo of api.repositories) {
-    if (fileFsPath.startsWith(repo.rootUri.fsPath) && (!best || repo.rootUri.fsPath.length > best.rootUri.fsPath.length)) {
+    const root = repo.rootUri.fsPath;
+    // Plain `startsWith` would let sibling repos collide -- a file under
+    // `/work/app-legacy` string-prefix-matches repo root `/work/app`. Require
+    // the match to land on a path-separator boundary (or be an exact match).
+    const isWithinRepo = fileFsPath === root || fileFsPath.startsWith(root + sep);
+    if (isWithinRepo && (!best || root.length > best.rootUri.fsPath.length)) {
       best = repo;
     }
   }

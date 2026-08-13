@@ -43,10 +43,22 @@ import { resolveGitApi } from "./vscode-integration/git-extension.ts";
 import { reconcileAfterGitChange, type OpenDocSnapshot } from "./vscode-integration/git-reload.ts";
 import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map/commands.ts";
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
+import { KeyedSerialQueue, repoBranchQueueKey } from "./vscode-integration/save-queue.ts";
 import * as settings from "./vscode-integration/settings.ts";
 import { StatusBarController } from "./vscode-integration/status-bar.ts";
 import { TouristStatusViewProvider } from "./vscode-integration/status-view.ts";
 import { WorkspaceAttributionProvider, type RollupNode } from "./vscode-integration/workspace-view.ts";
+
+/** Set by `activate()` to that call's own `flushPendingSaves`, so
+ * `deactivate()` -- a plain top-level export with no closure over
+ * `activate()`'s locals -- has something to actually await. VS Code awaits a
+ * `deactivate()` that returns a thenable before tearing the extension host
+ * down, which the previous fire-and-forget `void persistDoc(doc)` loop in
+ * `flushPendingSaves` never gave it the chance to do: on window close,
+ * several open documents' saves could run concurrently with nothing waiting
+ * on them, racing `PersistenceManager.record`'s load-merge-save cycle
+ * against each other for any two docs sharing a persistence key. */
+let flushPendingSavesOnDeactivate: (() => Promise<void>) | undefined;
 
 const SAVE_DEBOUNCE_MS = 2000;
 /** How long a git-op-suppression window stays open after the last observed
@@ -205,6 +217,7 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
   const dirtyTracker = new DirtyTracker();
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const folderKeyCache = new Map<string, RepoBranchKey>();
+  const saveQueue = new KeyedSerialQueue();
 
   async function keyFor(folder: vscode.WorkspaceFolder): Promise<RepoBranchKey> {
     const cached = folderKeyCache.get(folder.uri.fsPath);
@@ -315,7 +328,14 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
     const key = await keyFor(folder);
     const docId = docIdFor(doc.uri);
     const text = doc.getText();
-    await persistence.save(docId, simpleHash(text), key, engine.getRanges(docId), text);
+    const ranges = engine.getRanges(docId);
+    // Two docs that resolve to the same (repoRoot, branch) key -- e.g. a
+    // multi-root workspace, or several docs closing/flushing at once --
+    // would otherwise call `persistence.save` (PersistenceManager.record's
+    // unlocked load-merge-save cycle) concurrently and race each other's
+    // writes. Route same-key saves through `saveQueue` so they're chained
+    // instead; unrelated keys still save fully in parallel.
+    await saveQueue.run(repoBranchQueueKey(key), () => persistence.save(docId, simpleHash(text), key, ranges, text));
   }
 
   function scheduleSave(doc: vscode.TextDocument): void {
@@ -332,13 +352,20 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
     );
   }
 
-  function flushPendingSaves(): void {
+  async function flushPendingSaves(): Promise<void> {
     for (const timer of saveTimers.values()) clearTimeout(timer);
     saveTimers.clear();
-    for (const doc of vscode.workspace.textDocuments) {
-      if (doc.uri.scheme === "file") void persistDoc(doc);
-    }
+    // Awaited (not fire-and-forget) so a caller -- `deactivate()` below -- can
+    // itself await this and know every open doc's pending save has actually
+    // landed before the extension host tears things down. `persistDoc`
+    // itself still serializes same-(repoRoot, branch)-key saves against each
+    // other via `saveQueue`; awaiting all of them here just makes sure none
+    // are still in flight when this function returns.
+    await Promise.all(
+      vscode.workspace.textDocuments.filter((doc) => doc.uri.scheme === "file").map((doc) => persistDoc(doc))
+    );
   }
+  flushPendingSavesOnDeactivate = flushPendingSaves;
 
   async function openDoc(doc: vscode.TextDocument): Promise<void> {
     if (doc.uri.scheme !== "file") return;
@@ -565,7 +592,7 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
     }),
 
     // Flush any pending debounced saves so nothing's lost when the window closes.
-    new vscode.Disposable(() => flushPendingSaves()),
+    new vscode.Disposable(() => void flushPendingSaves()),
 
     hookLogReader,
     lockFileWatcher,
@@ -598,7 +625,9 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
   };
 }
 
-export function deactivate(): void {}
+export async function deactivate(): Promise<void> {
+  await flushPendingSavesOnDeactivate?.();
+}
 
 /** Placeholder content-hash for the mock persistence boundary -- Agent B's
  * real module owns the actual hashing scheme (src/core/hash.ts already
