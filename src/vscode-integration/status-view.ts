@@ -53,11 +53,25 @@ export class TouristStatusViewProvider implements vscode.WebviewViewProvider {
     this.view = webviewView;
     webviewView.webview.options = { enableScripts: true };
 
-    webviewView.webview.onDidReceiveMessage((message: StatusViewMessage) => {
+    webviewView.webview.onDidReceiveMessage(async (message: StatusViewMessage) => {
       if (message?.type !== "action" || !message.action) return;
       const commandId = ACTION_COMMANDS[message.action];
-      if (!commandId) return;
-      void vscode.commands.executeCommand(commandId).then(() => this.refresh());
+      if (!commandId) {
+        vscode.window.showErrorMessage(`Tourist: unrecognized status view action "${message.action}".`);
+        return;
+      }
+      // VS Code's webview message API does not surface a rejected promise
+      // from this callback anywhere -- an uncaught throw/rejection from the
+      // dispatched command would otherwise leave the user with a click that
+      // silently "does nothing" (the same class of bug already fixed in
+      // panel.ts's onDidReceiveMessage). Catch everything and report it
+      // explicitly.
+      try {
+        await vscode.commands.executeCommand(commandId);
+        await this.refresh();
+      } catch (err) {
+        vscode.window.showErrorMessage(`Tourist: ${message.action} failed: ${(err as Error).message ?? String(err)}`);
+      }
     });
 
     webviewView.onDidChangeVisibility(() => {
