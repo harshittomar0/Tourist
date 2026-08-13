@@ -63,7 +63,7 @@ Off by default (`tourist.knowledgeMap.enabled`). Where the rest of Tourist track
 - **Consent** — nothing runs until you explicitly trigger **Tourist: Generate Knowledge Map**, and a one-time consent dialog gates it; a separate, more explicit consent dialog gates `includePrompts` specifically, since it sends raw conversation history rather than just code.
 - **Review workflow** — **Tourist: Show Knowledge Map** opens the forest in the Dashboard's Knowledge Map tab as a tree you interact with directly: **confirm** or **reject** an AI-inferred node (moves it to a confirmed/gap state), **rename**, **add a child**, or **delete** a node, multi-select nodes for a **Deep Dive** (a follow-up analysis pass focused just on those topics), or trigger a **Re-review** on any already-confirmed/gap node to re-run analysis against just that topic.
 
-<!-- TODO screenshot: Dashboard's Knowledge Map tab showing a forest tree with confirmed/gap nodes and the multi-select Deep Dive affordance. -->
+![Knowledge Map's forest view showing Tech Stacks, CS Fundamentals, and Engineering Practice trees with confirmed, AI-needs-review, and known-gap badges](docs/screenshots/knowledge-map-forest.png)
 
 ### Commands
 
@@ -145,6 +145,10 @@ Then, in the running extension, turn on `tourist.knowledgeMap.enabled` and run *
 ## Built with AO (Agent Orchestrator)
 
 Tourist was built by orchestrating multiple specialized AO worker agents rather than as one continuous session. The workflow, throughout: agents work on branches and open pull requests, never commit straight to `main`; dedicated reviewer agents leave real approve/request-changes-style verdicts (as PR review docs and follow-up fix PRs); only reviewed work gets merged.
+
+Here's what it actually looked like — the AO board mid-build, with worker agents in flight across Idle/Working, Needs You, In Review, and Ready to Merge/Merged, each tied to a real PR:
+
+![AO Kanban-style board showing worker agents in flight, including a senior review, a fix-findings pass, and UI dashboard work, each attached to a real PR number](docs/screenshots/ao-orchestrator-board.png)
 
 **Parallel module split, then integration.** The initial build split the extension into independently-owned modules built by separate agents in parallel — a core detection engine, a persistence/git-integration layer, the VS Code UI layer, and a Phase 0/1 research spike — each on its own branch (see the `Merge Agent B's persistence layer`, `Merge Agent C's vscode-integration layer` commits). These were then merged into one integration branch and reconciled by a dedicated consolidation pass (`CONSOLIDATION_REPORT.md`, PR #1), which documented what merged cleanly versus what needed real fixing.
 
