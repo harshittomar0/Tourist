@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tourist — honest, per-line attribution for AI-assisted code</title>
+<meta name="description" content="Tourist is a VS Code extension that colors every line by who actually wrote it — Claude Code, you, or something it can't prove. No guessing: unproven changes are marked external/unknown, never silently called AI.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__brand" href="#top">
+      <span class="dot-row">
+        <span class="dot dot--ai"></span>
+        <span class="dot dot--human"></span>
+        <span class="dot dot--unknown"></span>
+      </span>
+      tourist
+    </a>
+    <ul class="nav__links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#knowledge-map">Knowledge Map</a></li>
+      <li><a href="#use-cases">Use cases</a></li>
+      <li><a href="#get-started">Get started</a></li>
+    </ul>
+    <a class="nav__cta" href="https://github.com/harshittomar0/Tourist">View on GitHub</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="container hero__grid">
+    <div>
+      <div class="hero__eyebrow">
+        <span class="eyebrow eyebrow--on-dark">VS Code extension · for Claude Code</span>
+      </div>
+      <h1>Every line, honestly&nbsp;attributed —<br><em>not</em> just assumed.</h1>
+      <p class="hero__sub">
+        Tourist watches your workspace and marks every line <strong>AI</strong>, <strong>human</strong>, or
+        <strong>external / unknown</strong> — live, per line, as you work. Most tools assume any change you
+        didn't type yourself was AI. Tourist only says that when it can prove it.
+      </p>
+      <div class="hero__cta-row">
+        <a class="btn btn--primary" href="https://github.com/harshittomar0/Tourist">Get Tourist on GitHub</a>
+        <a class="btn btn--ghost" href="#how-it-works">See how it works</a>
+      </div>
+      <div class="hero__legend">
+        <span class="legend-item"><span class="legend-swatch legend-swatch--ai"></span>AI — Claude Code, proven</span>
+        <span class="legend-item"><span class="legend-swatch legend-swatch--human"></span>Human — typed by you</span>
+        <span class="legend-item"><span class="legend-swatch legend-swatch--unknown"></span>External / unknown — unproven</span>
+      </div>
+    </div>
+
+    <div class="editor-mock" id="editor-mock" aria-hidden="true">
+      <div class="editor-mock__titlebar">
+        <span class="editor-mock__dots"><span></span><span></span><span></span></span>
+        <span class="editor-mock__filename">payments/charge.ts</span>
+      </div>
+      <div class="editor-mock__body" id="editor-lines">
+        <div class="eline" data-state="ai">
+          <span class="eline__num">1</span><span class="eline__bar"></span>
+          <span class="eline__code"><span class="kw">export async function</span> <span class="fn">chargeCard</span>(order: Order) {</span>
+        </div>
+        <div class="eline" data-state="ai">
+          <span class="eline__num">2</span><span class="eline__bar"></span>
+          <span class="eline__code">  <span class="kw">const</span> intent = <span class="kw">await</span> stripe.paymentIntents.create({</span>
+        </div>
+        <div class="eline" data-state="ai">
+          <span class="eline__num">3</span><span class="eline__bar"></span>
+          <span class="eline__code">    amount: order.total, currency: <span class="str">"usd"</span>,</span>
+        </div>
+        <div class="eline" data-state="human">
+          <span class="eline__num">4</span><span class="eline__bar"></span>
+          <span class="eline__code">    <span class="cm">// retry once — flaky in staging</span></span>
+        </div>
+        <div class="eline" data-state="human">
+          <span class="eline__num">5</span><span class="eline__bar"></span>
+          <span class="eline__code">  }).catch(() =&gt; retryCharge(order));</span>
+        </div>
+        <div class="eline" data-state="unknown">
+          <span class="eline__num">6</span><span class="eline__bar"></span>
+          <span class="eline__code">  <span class="kw">if</span> (!intent) <span class="kw">throw new</span> ChargeError(order.id);</span>
+        </div>
+        <div class="eline" data-state="ai">
+          <span class="eline__num">7</span><span class="eline__bar"></span>
+          <span class="eline__code">  <span class="kw">return</span> intent;</span>
+        </div>
+        <div class="eline" data-state="unknown">
+          <span class="eline__num">8</span><span class="eline__bar"></span>
+          <span class="eline__code">}</span>
+        </div>
+      </div>
+      <div class="editor-mock__statusbar">
+        <span>Tourist</span>
+        <span class="split">
+          <strong id="pct-ai">43%</strong>&nbsp;AI ·
+          <span class="h" id="pct-human">29%</span>&nbsp;human ·
+          <span class="u" id="pct-unknown">28%</span>&nbsp;external
+        </span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="band">
+  <div class="container band__inner">
+    <div class="reveal">
+      <h2>Silence isn't proof of AI.</h2>
+      <p class="lede">
+        Every AI-attribution tool built on top of an editor uses the same shortcut: if a line changed and
+        nobody saw you type it, call it AI. That's a guess dressed up as a signal — a formatter, another
+        agent, a Git operation, or a teammate's Live Share session all look identical to "the AI did it"
+        under that logic.
+      </p>
+    </div>
+    <div class="reveal">
+      <p class="callout">
+        Tourist adds a third, honest state: <strong>external / unknown</strong>. If it can't trace a
+        change back to a real Claude Code signal, it says so — instead of quietly marking your commit
+        history with a confident answer it has no basis for.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works" class="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow eyebrow--on-dark">How it works</span>
+      <h2>Three tiers of evidence, checked in order.</h2>
+      <p>Tourist doesn't classify a line until it has run out of stronger evidence to check first. Each tier only fires when the one before it comes up empty.</p>
+    </div>
+
+    <div class="flow">
+      <div class="flow__step reveal">
+        <span class="flow__tier">TIER 1</span>
+        <div>
+          <div class="flow__q">Did Claude Code's own hook report writing this line?</div>
+          <p class="flow__note">
+            Tourist installs a hook into Claude Code's <code style="font-family:var(--font-mono)">PreToolUse</code>/<code style="font-family:var(--font-mono)">PostToolUse</code>
+            events for <code style="font-family:var(--font-mono)">Edit</code>, <code style="font-family:var(--font-mono)">Write</code>, and <code style="font-family:var(--font-mono)">MultiEdit</code>.
+            This is ground truth, not inference — Claude Code told Tourist directly.
+          </p>
+          <div class="flow__branches">
+            <span class="branch branch--ai">Yes <span class="arrow">→</span> <span class="result">AI</span></span>
+            <span class="branch branch--continue">No <span class="arrow">→</span> check Tier 2</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow__step reveal">
+        <span class="flow__tier">TIER 2</span>
+        <div>
+          <div class="flow__q">Was the file clean, and does the disk write line up with an active Claude Code IDE session for this workspace?</div>
+          <p class="flow__note">
+            Corroborating evidence — Claude Code's own IDE lock file, or a shell/process trail — for a
+            hook signal that didn't arrive. Lower confidence than Tier 1, but still tied to a real,
+            observable Claude Code session, not a guess.
+          </p>
+          <div class="flow__branches">
+            <span class="branch branch--ai">Yes <span class="arrow">→</span> <span class="result">AI</span> (corroborated)</span>
+            <span class="branch branch--human">File was already dirty <span class="arrow">→</span> <span class="result">Human</span></span>
+            <span class="branch branch--continue">Neither <span class="arrow">→</span> check Tier 3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow__step reveal">
+        <span class="flow__tier">TIER 3</span>
+        <div>
+          <div class="flow__q">No hook signal, no corroboration — what actually changed this line?</div>
+          <p class="flow__note">
+            A formatter, another tool, another AI, a Git operation, or anything else Tourist has no
+            evidence about. This is the deliberate honest-uncertainty bucket. It is never collapsed into
+            "AI" by default.
+          </p>
+          <div class="flow__branches">
+            <span class="branch branch--unknown">No evidence <span class="arrow">→</span> <span class="result">External / unknown</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Features</span>
+      <h2>What you actually see while you work.</h2>
+      <p>No dashboards to open, no reports to generate — attribution renders inline, live, in the editor you're already using.</p>
+    </div>
+
+    <div class="feature-grid reveal">
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--ai-blue-tint); border:1px solid var(--ai-blue);"></div>
+        <h3>Gutter decorations</h3>
+        <p>
+          Every attributed line gets a colored left-edge marker: solid blue for AI, solid orange for human,
+          dashed magenta with a <code>?</code> icon for external/unknown. Hover any line for a plain-language
+          tooltip. Decorations update live as you type, save, and switch editors. Lines nobody has touched
+          yet stay undecorated.
+        </p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--paper); border:1px solid var(--ink);"></div>
+        <h3>Status bar rollup</h3>
+        <p>
+          A status bar item shows your workspace-wide split as a percentage — e.g.
+          <code>Tourist: 40% AI, 45% human, 15% external</code>. Click it to open the full breakdown.
+        </p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--human-orange-tint); border:1px solid var(--human-orange);"></div>
+        <h3>Attribution tree view</h3>
+        <p>
+          A tree view named <strong>Attribution</strong>, nested under the built-in Explorer panel, rolls up
+          stats folder → file — so you can see at a glance which parts of the workspace are mostly
+          AI-written, human-written, or unknown.
+        </p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--unknown-magenta-tint); border:1px dashed var(--unknown-magenta);"></div>
+        <h3>Hook install &amp; verify</h3>
+        <p>
+          <code>Tourist: Install Claude Code Hook</code> wires up the ground-truth signal in one step;
+          <code>Tourist: Verify Claude Code Hook</code> confirms it's pointed at the right script. Both
+          live in the Command Palette or the telescope icon in the editor title bar.
+        </p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--paper); border:1px solid var(--ink);"></div>
+        <h3>Toggle tracking &amp; markers independently</h3>
+        <p>
+          Turn recording off and existing markers freeze in place — nothing new is saved. Turn gutter
+          markers off separately to hide the visuals without touching what's being recorded.
+        </p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__mark" style="background:var(--paper); border:1px solid var(--ink);"></div>
+        <h3>Rename-safe history</h3>
+        <p>
+          Attribution is keyed by content hash, not file path, so moving or renaming a file doesn't orphan
+          its history. Writes to local storage are atomic.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="persist">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Persistence</span>
+      <h2>Local by default. Shared only if you turn it on.</h2>
+      <p>Tourist never phones anything home on its own. There are exactly two places attribution history can live.</p>
+    </div>
+
+    <div class="persist-grid reveal">
+      <div class="persist-card persist-card--local">
+        <span class="persist-card__badge">Default · always on</span>
+        <h3>Local storage</h3>
+        <p>Every workspace's attribution history is written to a JSON file in VS Code's global storage, keyed by repo path and branch.</p>
+        <ul>
+          <li>Zero configuration, zero network calls</li>
+          <li>Keyed by content hash, so renames don't orphan history</li>
+          <li>Writes are atomic</li>
+        </ul>
+      </div>
+
+      <div class="persist-card persist-card--notes">
+        <span class="persist-card__badge">Opt-in · off by default</span>
+        <h3>Git notes (team sharing)</h3>
+        <p>Set <code>tourist.gitNotesSync</code> to <code>true</code> to sync attribution history as git notes under <code>refs/notes/tourist-attribution</code>, so a team can share it.</p>
+        <ul>
+          <li>Sync is entirely manual — <code>Push Attribution Notes</code> / <code>Fetch Attribution Notes</code></li>
+          <li>No automatic sync on commit</li>
+          <li>Nothing goes over the network unless you run one of those two commands with the setting enabled</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="knowledge-map" class="kmap">
+  <div class="container">
+    <div class="kmap__grid">
+      <div class="reveal">
+        <span class="eyebrow">A separate, opt-in feature</span>
+        <h2 style="margin-top:10px;">Knowledge Map: what you actually understand — not just what AI wrote for you.</h2>
+        <p style="margin-top:16px; color:var(--ink-soft); font-size:16px; max-width:52ch;">
+          Attribution tells you who typed a line. Knowledge Map answers a different question: given your
+          real commits and diffs, what topics and skills does the evidence actually support? It's a
+          separate system from the blue/orange/magenta line attribution above — deliberately not colored
+          the same way, because it isn't gutter data.
+        </p>
+        <p style="margin-top:14px; color:var(--ink-soft); font-size:16px; max-width:52ch;">
+          Running it sends recent git diffs and commit messages to Claude to classify into three
+          forests — <strong>Tech Stacks</strong>, <strong>CS Fundamentals</strong>, and
+          <strong>Engineering Practice</strong>. Claude Code prompt history is only included if you
+          separately opt into that as well.
+        </p>
+        <div class="kmap__note">
+          <strong>Off by default. Nothing runs without explicit confirmation.</strong>
+          Turn on <code>tourist.knowledgeMap.enabled</code>, then the first run shows a modal naming
+          exactly what's about to be sent and which backend it's going to, before anything leaves your
+          machine. <code>Tourist: Generate Knowledge Map</code> and <code>Tourist: Show Knowledge Map</code>
+          are the two commands involved.
+        </div>
+      </div>
+
+      <div class="forest reveal" aria-hidden="true">
+        <div class="forest__row">
+          <span class="name">Backend — TypeScript</span>
+          <span class="meta">Tech Stack</span>
+        </div>
+        <div class="forest__bar"><span style="width:78%"></span></div>
+
+        <div class="forest__row" style="margin-top:14px;">
+          <span class="name">Concurrency &amp; Systems</span>
+          <span class="meta">CS Fundamentals</span>
+        </div>
+        <div class="forest__bar"><span style="width:54%"></span></div>
+
+        <div class="forest__row" style="margin-top:14px;">
+          <span class="name">Testing discipline</span>
+          <span class="meta">Engineering Practice</span>
+        </div>
+        <div class="forest__bar"><span style="width:66%"></span></div>
+
+        <div class="forest__row" style="margin-top:14px;">
+          <span class="name">Async / event-driven patterns</span>
+          <span class="meta">Tech Stack</span>
+        </div>
+        <div class="forest__bar"><span style="width:41%"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="use-cases">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Use cases</span>
+      <h2>Who this is actually for.</h2>
+      <p>Tourist is scoped narrowly on purpose — one AI tool, one editor — in exchange for an honest signal instead of a confident guess.</p>
+    </div>
+
+    <div class="usecase-grid reveal">
+      <article class="usecase-card" data-accent="ai">
+        <span class="eyebrow">Individual developers</span>
+        <h3>Know your own AI usage, honestly.</h3>
+        <p>
+          See exactly how much of what's in your workspace you actually typed versus how much Claude Code
+          wrote — without a tool inflating the "AI" number by lumping in every formatter pass and git
+          checkout along the way.
+        </p>
+      </article>
+
+      <article class="usecase-card" data-accent="human">
+        <span class="eyebrow">Teams &amp; reviewers</span>
+        <h3>Accountability and audit trails on AI-assisted code.</h3>
+        <p>
+          Turn on <code>tourist.gitNotesSync</code> to share attribution history with teammates via git
+          notes, so review focus and audit questions about AI-assisted changes are backed by ground-truth
+          hook data — not a reviewer's memory or a guess about who touched what.
+        </p>
+      </article>
+
+      <article class="usecase-card" data-accent="unknown">
+        <span class="eyebrow">Engineering leads</span>
+        <h3>See skill growth, not just AI-vs-human ratios.</h3>
+        <p>
+          Knowledge Map turns real commits and diffs into a picture of what a developer actually
+          understands across tech stack, CS fundamentals, and engineering practice — evidence-based, and
+          opt-in with explicit consent before anything is sent anywhere.
+        </p>
+      </article>
+
+      <article class="usecase-card" data-accent="neutral">
+        <span class="eyebrow">Learning &amp; onboarding</span>
+        <h3>Tell AI-authored scaffolding apart from what you wrote to learn it.</h3>
+        <p>
+          When you're ramping up in a new codebase alongside Claude Code, the gutter tells you at a glance
+          which lines you should actually be able to explain — and which were generated for you.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="get-started" class="get-started">
+  <div class="container get-started__inner">
+    <div class="reveal">
+      <span class="eyebrow">Get started</span>
+      <h2>Build it from source.</h2>
+      <p>Tourist is a VS Code extension you build and load locally — clone it, install dependencies, and launch an Extension Development Host.</p>
+      <ul class="req-list">
+        <li><code>VS Code ^1.85.0</code><span>Minimum editor version</span></li>
+        <li><code>Node.js &gt;=18</code><span>For building from source</span></li>
+        <li><code>Claude Code CLI</code><span>Install the Tourist hook via the Command Palette for the ground-truth AI signal</span></li>
+      </ul>
+    </div>
+    <div class="terminal reveal">
+      <div><span class="cm"># clone &amp; install</span></div>
+      <div><span class="prompt">$</span> git clone https://github.com/harshittomar0/Tourist.git</div>
+      <div><span class="prompt">$</span> cd Tourist &amp;&amp; npm install</div>
+      <div><span class="prompt">$</span> npm run build</div>
+      <div>&nbsp;</div>
+      <div><span class="cm"># then press F5 in VS Code to launch</span></div>
+      <div><span class="cm"># an Extension Development Host with Tourist loaded</span></div>
+      <div>&nbsp;</div>
+      <div><span class="cm"># once running, from the Command Palette:</span></div>
+      <div><span class="prompt">›</span> Tourist: Install Claude Code Hook</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container footer__inner">
+    <span>Tourist — live, per-line attribution for Claude Code. Local-first, always.</span>
+    <span class="footer__links">
+      <a href="https://github.com/harshittomar0/Tourist">GitHub</a>
+      <a href="https://github.com/harshittomar0/Tourist#readme">README</a>
+      <a href="https://claude.com/claude-code">Claude Code</a>
+    </span>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
