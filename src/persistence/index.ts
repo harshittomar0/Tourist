@@ -2,7 +2,7 @@ import { toPersistedEntry } from "./hashing.js";
 import { resolveGitContext } from "./gitContext.js";
 import { applyRenameEvents, reconcileOrphanedEntries, type RenameEvent } from "./rekey.js";
 import { pruneExpired, type RetentionOptions } from "./retention.js";
-import { LocalStore, upsertByContentHash } from "./store.js";
+import { LocalStore, upsertEntries } from "./store.js";
 import type { AttributedRange, PersistedStore, RepoBranchKey } from "./types.js";
 import type { VscodeGitAPI } from "./vscodeGitTypes.js";
 
@@ -38,7 +38,7 @@ export class PersistenceManager {
 
   async record(key: RepoBranchKey, ranges: AttributedRange[]): Promise<PersistedStore> {
     const existing = await this.store.load(key);
-    const merged = upsertByContentHash(existing, ranges.map(toPersistedEntry));
+    const merged = upsertEntries(existing, ranges.map(toPersistedEntry));
     const pruned = pruneExpired(merged, { retentionDays: this.options.retentionDays });
     await this.store.save(pruned);
     return pruned;

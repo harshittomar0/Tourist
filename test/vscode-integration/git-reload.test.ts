@@ -255,6 +255,118 @@ describe("branch-switch / stash-pop attribution round trip (real git repo)", () 
     // of settling.
     expect(cyclePercentages[1]).toEqual(cyclePercentages[0]);
   });
+
+  // Regression for REVIEW_SENIOR.md's `folderKeyCache`/BranchWatcher-lag
+  // finding: `folderKeyCache` used to be invalidated *only* by
+  // BranchWatcher's callback, which per spike/FINDINGS.md Experiment 6 lags
+  // the real git checkout by 1.2-3.3s+ -- longer than extension.ts's
+  // SAVE_DEBOUNCE_MS (2000ms). If a debounced save fires in that window, it
+  // reads whatever's still cached and persists the *new* branch's content
+  // under the *old* branch's key -- polluting that branch's stored history
+  // with content that was never actually seen on that branch, and that will
+  // never validate against it again (dead weight until retention prunes it).
+  // This test drives the exact same shared-cache pattern extension.ts uses
+  // (see the `keyFor`/`restoreFor`/`persistDoc` helpers above) to prove the
+  // pollution happens when nothing invalidates the cache before the save.
+  it("without cache invalidation, a save that fires with the stale pre-checkout key writes the new branch's content into the old branch's store", async () => {
+    const onMain = "line one\ntwo\nthree\n";
+    await writeFile(docId, onMain);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on main"]);
+
+    engine.open(docId, onMain, [
+      { startOffset: 0, endOffset: onMain.length, origin: "ai", tier: "2a", timestamp: Date.now() - 10_000 },
+    ]);
+    await persistDoc(docId, onMain); // persisted under key(repoRoot, "main")
+    expect(folderKeyCache.get(repoDir)).toEqual({ repoRoot: repoDir, branch: "main" });
+
+    const mainKey: RepoBranchKey = { repoRoot: repoDir, branch: "main" };
+    const beforeBug = await persistence.listPersisted(mainKey);
+    expect(beforeBug.find((d) => d.docId === docId)?.ranges).toHaveLength(1);
+
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    const onFeature = "totally different content on this branch\n";
+    await writeFile(docId, onFeature);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+
+    // The real trigger: switching to "feature" flips the working tree
+    // instantly. `folderKeyCache` is untouched -- nothing has invalidated
+    // it, exactly the pre-fix state right after `git checkout` but before
+    // BranchWatcher's lagging callback runs.
+    git(repoDir, ["checkout", "-q", "feature"]);
+    const afterCheckout = await readFile(docId, "utf8");
+    expect(afterCheckout).toBe(onFeature);
+    expect(folderKeyCache.get(repoDir)).toEqual({ repoRoot: repoDir, branch: "main" }); // still stale
+
+    // The debounced save fires using that stale cached key.
+    engine.reload(docId, afterCheckout, [
+      { startOffset: 0, endOffset: afterCheckout.length, origin: "external", tier: null, timestamp: Date.now() },
+    ]);
+    await persistDoc(docId, afterCheckout);
+
+    // Pollution: "main"'s store now also holds an entry describing
+    // "feature"'s content, even though this repo/workspace was never on
+    // "main" with that content -- a stray entry that can only ever be dead
+    // weight for "main" going forward.
+    const afterBug = await persistence.listPersisted(mainKey);
+    expect(afterBug.find((d) => d.docId === docId)?.ranges.length).toBeGreaterThan(1);
+  });
+
+  it("fix: invalidating the cache via reconcileAfterGitChange before the debounced save keeps each branch's content in its own store", async () => {
+    const onMain = "line one\ntwo\nthree\n";
+    await writeFile(docId, onMain);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on main"]);
+
+    engine.open(docId, onMain, [
+      { startOffset: 0, endOffset: onMain.length, origin: "ai", tier: "2a", timestamp: Date.now() - 10_000 },
+    ]);
+    await persistDoc(docId, onMain);
+
+    const mainKey: RepoBranchKey = { repoRoot: repoDir, branch: "main" };
+    const featureKey: RepoBranchKey = { repoRoot: repoDir, branch: "feature" };
+
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    const onFeature = "totally different content on this branch\n";
+    await writeFile(docId, onFeature);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+
+    git(repoDir, ["checkout", "-q", "feature"]);
+    const afterCheckout = await readFile(docId, "utf8");
+
+    // The fix: extension.ts's disk-write handler now runs this exact
+    // invalidate-then-restore sequence itself, synchronously with the
+    // disk-write signal, instead of waiting on BranchWatcher -- so by the
+    // time the debounced save fires below, the cache is already correct.
+    await reconcile(afterCheckout);
+    expect(folderKeyCache.get(repoDir)).toEqual({ repoRoot: repoDir, branch: "feature" });
+
+    // Some attribution accrues for "feature"'s content by the time the
+    // debounced save fires (a live edit, or -- as in the sibling "without
+    // cache invalidation" test above -- whatever the engine assigns on
+    // first seeing this content); the point under test is *which key* it
+    // lands under, not what the attribution itself is.
+    engine.reload(docId, afterCheckout, [
+      { startOffset: 0, endOffset: afterCheckout.length, origin: "external", tier: null, timestamp: Date.now() },
+    ]);
+    await persistDoc(docId, afterCheckout);
+
+    // "main"'s store is untouched by the branch switch: still exactly the
+    // one entry it had before, no pollution from "feature"'s content.
+    const mainAfter = await persistence.listPersisted(mainKey);
+    expect(mainAfter.find((d) => d.docId === docId)?.ranges).toHaveLength(1);
+    const mainRestored = await persistence.load(docId, "", mainKey, onMain);
+    expect(mainRestored).toBeDefined();
+    expect(mainRestored!.some((r) => r.origin === "ai")).toBe(true);
+
+    // "feature"'s content was correctly persisted under its own key.
+    const featureAfter = await persistence.listPersisted(featureKey);
+    expect(featureAfter.find((d) => d.docId === docId)?.ranges).toHaveLength(1);
+  });
 });
 
 describe("reconcileAfterGitChange (unit, fake deps)", () => {

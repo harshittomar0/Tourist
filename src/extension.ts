@@ -434,12 +434,42 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
       // formatter, ...) -- persistence.load returns undefined and the
       // normal classification path below runs exactly as before.
       if (isDiskWrite && !isHookConfirmedWrite) {
-        void restoreFor(event.document).then((restored) => {
-          if (restored !== undefined) {
-            engine.reload(docId, event.document.getText(), restored);
+        // Invalidate this doc's folderKeyCache entry *now*, synchronously
+        // with the disk-write signal, instead of waiting on BranchWatcher's
+        // callback to eventually do it (per spike/FINDINGS.md Experiment 6,
+        // that lags the actual git checkout by 1.2-3.3s+ -- longer than
+        // SAVE_DEBOUNCE_MS). Without this, `restoreFor` below reads whatever
+        // (possibly still-stale, pre-checkout) key is cached, and worse: if
+        // `scheduleSave`'s debounced `persistDoc` below fires before
+        // BranchWatcher ever invalidates the cache, it would persist this
+        // branch's live content under the *previous* branch's key,
+        // corrupting that branch's stored history. Reusing
+        // `reconcileAfterGitChange` (the same invalidate-then-restore
+        // sequencing BranchWatcher's own callback uses, see git-reload.ts)
+        // makes this doc's key resolution correct immediately, independent
+        // of BranchWatcher's timing entirely.
+        const folder = vscode.workspace.getWorkspaceFolder(event.document.uri);
+        const reload = async (): Promise<void> => {
+          if (folder) {
+            await reconcileAfterGitChange(
+              {
+                folderKeyCache,
+                restore: () => restoreFor(event.document),
+                reloadEngine: (id, text, restored) => {
+                  if (restored !== undefined) engine.reload(id, text, restored);
+                  else engine.pushChanges(batch);
+                },
+              },
+              [folder.uri.fsPath],
+              [{ docId, folderPath: folder.uri.fsPath, text: event.document.getText() }]
+            );
           } else {
-            engine.pushChanges(batch);
+            const restored = await restoreFor(event.document);
+            if (restored !== undefined) engine.reload(docId, event.document.getText(), restored);
+            else engine.pushChanges(batch);
           }
+        };
+        void reload().then(() => {
           scheduleSave(event.document);
           for (const editor of vscode.window.visibleTextEditors) {
             if (editor.document === event.document) refreshEditorDecorations(editor);

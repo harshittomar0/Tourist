@@ -50,14 +50,42 @@ export class LocalStore {
 }
 
 /**
- * Upserts entries keyed by content hash (the whole point: identity survives
- * fsPath changes). On a hash collision the incoming entry wins, matching
- * "last write wins" for same-content ranges.
+ * Upserts entries keyed by (lastSeenFsPath, range.startLine, range.endLine,
+ * contentHash) -- location AND content, not content alone. A hash-only key
+ * (the previous implementation) is never unique on its own: two unrelated
+ * locations sharing byte-identical text (a lone "}", "return null;", a blank
+ * line -- extremely common) collided and silently clobbered each other, even
+ * across different files, on ordinary editing with no git involved.
+ * Including the location in the key fixes that: two identical-text spans at
+ * different (fsPath, line) coordinates now get different keys and both
+ * survive.
+ *
+ * `contentHash` stays *part of* the key rather than being dropped in favor
+ * of location alone, because a location's superseded content is meant to
+ * remain findable, not be overwritten: `fromPersistedEntry`
+ * (persistence-adapter.ts) validates each stored entry independently by
+ * re-hashing whatever text currently sits at that entry's own recorded
+ * line-range, so an older entry whose exact (location, content) reappears
+ * later -- e.g. a `git stash pop` reverting a file back to text it had
+ * before a since-discarded edit -- is exactly what lets that older
+ * attribution be found and restored again. Keying on location alone would
+ * have the *new* save silently overwrite that still-useful older entry
+ * before the revert ever happens. Growth is bounded the same way it already
+ * was pre-fix: `pruneExpired` (retention.ts) ages entries out by
+ * `attribution.updatedAt`, independent of this key shape.
+ *
+ * On an exact (location, content) repeat -- the same span saved again with
+ * unchanged text -- the incoming entry simply replaces the old one in place
+ * (refreshed attribution/timestamp), same "last write wins" semantics as
+ * before.
  */
-export function upsertByContentHash(store: PersistedStore, incoming: PersistedEntry[]): PersistedStore {
-  const byHash = new Map(store.entries.map((e) => [e.contentHash, e]));
+export function upsertEntries(store: PersistedStore, incoming: PersistedEntry[]): PersistedStore {
+  const keyOf = (e: PersistedEntry): string =>
+    `${e.lastSeenFsPath}::${e.range.startLine}::${e.range.endLine}::${e.contentHash}`;
+
+  const byKey = new Map(store.entries.map((e) => [keyOf(e), e]));
   for (const entry of incoming) {
-    byHash.set(entry.contentHash, entry);
+    byKey.set(keyOf(entry), entry);
   }
-  return { ...store, entries: [...byHash.values()] };
+  return { ...store, entries: [...byKey.values()] };
 }

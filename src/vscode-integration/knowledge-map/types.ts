@@ -65,8 +65,16 @@ export interface DeepDiveMessage {
 
 /** Sent when the user clicks the "Re-review" affordance on a single
  * confirmed/gap node -- see html.ts's injected bridge script. `topic` is the
- * node's bare label (matching the analyser CLI's `--reopen label1,label2,...`
- * flag), not a full path -- same convention as `DeepDiveMessage.topics`.
+ * node's FULL root-to-node ancestor path, ">"-joined (e.g.
+ * "Django > ORM & migrations"), matching the analyser CLI's
+ * `--reopen path1,path2,...` chain syntax (see
+ * ideation/knowledge-forest/analyser/src/forest/deepDive.ts's
+ * resolveDeepDiveTopics). Unlike `DeepDiveMessage.topics` (bare labels --
+ * deep dive is purely informational for the prompt and doesn't need to
+ * disambiguate), this one MUST be the full path: forest/merge.ts's
+ * mergeNodeList matches --reopen targets against the full ancestor path
+ * built during tree traversal, so a bare label only matches a root-level
+ * node and silently no-ops for anything nested.
  * This is an explicit, one-time opt-in: it does not change the node's
  * stored provenance, it only lets this one analyser run's fresh guess update
  * that node's proficiency/evidence (see ideation/knowledge-forest/analyser/src/forest/merge.ts's
