@@ -66,3 +66,15 @@ export interface DeepDiveTopic {
   forestKind: ForestKind;
   path: string[];
 }
+
+/**
+ * A single --reopen target, resolved against the *existing* forest the same
+ * way a --deep-dive target is (see forest/deepDive.ts's
+ * `resolveDeepDiveTopics`, reused for both flags). Threaded through
+ * mergeForest (see forest/merge.ts) as a one-time, this-call-only exception:
+ * it lets a confirmed/gap node's proficiency/evidence update from this run's
+ * fresh guess without permanently changing its provenance. A later merge
+ * call that doesn't re-supply the same target reverts the node to full
+ * freeze — nothing about the reopen is persisted in the forest data itself.
+ */
+export type ReopenTarget = DeepDiveTopic;

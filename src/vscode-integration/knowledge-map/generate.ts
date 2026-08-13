@@ -3,9 +3,9 @@
  * `vscode` import -- pure enough to unit test without an extension host.
  *
  * The flag set below (`--claude-backend`/`--claude-cli-path`/`--model`/
- * `--since`/`--max-commits`/`--forest`/`--include-prompts`/`--deep-dive`)
- * matches ideation/knowledge-forest/analyser/src/cli.ts's real, landed
- * interface. Note `--out` (not `--forest`) is the output-path flag --
+ * `--since`/`--max-commits`/`--forest`/`--include-prompts`/`--deep-dive`/
+ * `--reopen`) matches ideation/knowledge-forest/analyser/src/cli.ts's real,
+ * landed interface. Note `--out` (not `--forest`) is the output-path flag --
  * cli.ts's own `--forest` takes a comma-separated list of forest *kinds*
  * (tech/cs/practice), a different thing entirely; passing a JSON path
  * there silently filters down to zero kinds instead of erroring.
@@ -34,6 +34,13 @@ export interface GenerateOptions {
    * see html.ts's "Deep Dive on Selected" affordance. Omitted/empty for a
    * normal whole-forest generate. */
   deepDiveTopics?: string[];
+  /** Node label(s) the user explicitly asked to re-review this run -- see
+   * html.ts's "Re-review" affordance on confirmed/gap nodes. Threaded to
+   * `--reopen`, a one-time opt-in that lets this run's fresh guess update
+   * that node's proficiency/evidence without permanently unfreezing its
+   * provenance (see forest/merge.ts's ReopenTarget handling). Omitted/empty
+   * for a normal run, where confirmed/gap nodes stay fully frozen. */
+  reopenTopics?: string[];
 }
 
 export function buildAnalyserArgs(opts: GenerateOptions): string[] {
@@ -60,6 +67,9 @@ export function buildAnalyserArgs(opts: GenerateOptions): string[] {
   }
   if (opts.deepDiveTopics && opts.deepDiveTopics.length > 0) {
     args.push("--deep-dive", opts.deepDiveTopics.join(","));
+  }
+  if (opts.reopenTopics && opts.reopenTopics.length > 0) {
+    args.push("--reopen", opts.reopenTopics.join(","));
   }
   return args;
 }

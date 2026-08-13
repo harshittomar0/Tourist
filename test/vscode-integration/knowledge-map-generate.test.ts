@@ -80,6 +80,24 @@ describe("buildAnalyserArgs", () => {
       expect.arrayContaining(["--since", "2026-06-01", "--max-commits", "5", "--forest", "tech"])
     );
   });
+
+  it("appends --reopen with a comma-joined topic list only when topics are given", () => {
+    const args = buildAnalyserArgs({
+      ...BASE_OPTS,
+      forestJsonPath: "/repo/forest.json",
+      reopenTopics: ["Django"],
+    });
+    expect(args.slice(-2)).toEqual(["--reopen", "Django"]);
+  });
+
+  it("omits --reopen when the topic list is empty", () => {
+    const args = buildAnalyserArgs({
+      ...BASE_OPTS,
+      forestJsonPath: "/repo/forest.json",
+      reopenTopics: [],
+    });
+    expect(args).not.toContain("--reopen");
+  });
 });
 
 describe("looksLikeUnsupportedFlags", () => {

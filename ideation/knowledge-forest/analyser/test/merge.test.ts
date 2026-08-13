@@ -126,6 +126,62 @@ describe("mergeForest", () => {
     expect(result.tech[0].children[0].label).toBe("Ownership & borrowing");
   });
 
+  it("updates a reopened confirmed node's proficiency/evidence for that one call, while a non-reopened confirmed node stays frozen", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [
+        node({ label: "Django", provenance: "confirmed", proficiency: 4, evidence: [] }),
+        node({ label: "Flask", provenance: "confirmed", proficiency: 2, evidence: [] })
+      ]
+    };
+    const incoming: ForestFile = {
+      ...empty(),
+      tech: [
+        node({
+          label: "Django",
+          provenance: "ai",
+          proficiency: 1,
+          evidence: [{ source: "git", ref: "def456", detail: "New Django signals usage" }]
+        }),
+        node({ label: "Flask", provenance: "ai", proficiency: 5 })
+      ]
+    };
+
+    const result = mergeForest(existing, incoming, [{ forestKind: "tech", path: ["Django"] }]);
+
+    const django = result.tech.find((n) => n.label === "Django")!;
+    expect(django.provenance).toBe("confirmed"); // provenance never rewritten to "tracked"
+    expect(django.proficiency).toBe(1); // reopened: fresh guess updates proficiency
+    expect(django.evidence).toEqual([{ source: "git", ref: "def456", detail: "New Django signals usage" }]);
+
+    const flask = result.tech.find((n) => n.label === "Flask")!;
+    expect(flask.provenance).toBe("confirmed");
+    expect(flask.proficiency).toBe(2); // not reopened: still fully frozen
+  });
+
+  it("reverts a reopened node to full freeze on the next merge call once --reopen isn't passed again", () => {
+    const existing: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Django", provenance: "confirmed", proficiency: 4 })]
+    };
+    const firstIncoming: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Django", provenance: "ai", proficiency: 1 })]
+    };
+
+    const afterReopen = mergeForest(existing, firstIncoming, [{ forestKind: "tech", path: ["Django"] }]);
+    expect(afterReopen.tech[0]).toMatchObject({ provenance: "confirmed", proficiency: 1 });
+
+    const secondIncoming: ForestFile = {
+      ...empty(),
+      tech: [node({ label: "Django", provenance: "ai", proficiency: 5 })]
+    };
+
+    // No reopen list passed this time -- the node is fully frozen again.
+    const afterSecondRun = mergeForest(afterReopen, secondIncoming);
+    expect(afterSecondRun.tech[0]).toMatchObject({ provenance: "confirmed", proficiency: 1 });
+  });
+
   it("recurses into a confirmed parent's children so new sub-nodes can still be proposed", () => {
     const existing: ForestFile = {
       ...empty(),

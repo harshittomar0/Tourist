@@ -63,6 +63,20 @@ export interface DeepDiveMessage {
   topics: string[];
 }
 
+/** Sent when the user clicks the "Re-review" affordance on a single
+ * confirmed/gap node -- see html.ts's injected bridge script. `topic` is the
+ * node's bare label (matching the analyser CLI's `--reopen label1,label2,...`
+ * flag), not a full path -- same convention as `DeepDiveMessage.topics`.
+ * This is an explicit, one-time opt-in: it does not change the node's
+ * stored provenance, it only lets this one analyser run's fresh guess update
+ * that node's proficiency/evidence (see ideation/knowledge-forest/analyser/src/forest/merge.ts's
+ * ReopenTarget handling). Without the user re-reviewing again on a later
+ * run, the node goes back to being fully frozen. */
+export interface ReopenNodeMessage {
+  type: "reopenNode";
+  topic: string;
+}
+
 /** Sent whenever the user changes the theme dropdown, so the extension host
  * can carry the choice forward into the next `buildKnowledgeMapHtml` call --
  * see html.ts's injected bridge script. Without this, panel.ts's `render()`
@@ -73,4 +87,4 @@ export interface ThemeChangedMessage {
   theme: string;
 }
 
-export type WebviewToExtensionMessage = NodeOverrideMessage | DeepDiveMessage | ThemeChangedMessage;
+export type WebviewToExtensionMessage = NodeOverrideMessage | DeepDiveMessage | ReopenNodeMessage | ThemeChangedMessage;

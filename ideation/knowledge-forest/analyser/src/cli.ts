@@ -30,6 +30,11 @@ interface CliOptions {
   claudeCliPath: string;
   /** Raw --deep-dive entries (comma-separated labels/paths), not yet resolved against the existing forest. */
   deepDiveLabels: string[];
+  /** Raw --reopen entries (comma-separated labels/paths), not yet resolved against the existing forest.
+   * See forest/merge.ts's ReopenTarget doc comment: a one-time, this-call-only exception that lets a
+   * confirmed/gap node's proficiency/evidence update from this run's guess, without permanently
+   * changing its provenance. */
+  reopenLabels: string[];
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -45,7 +50,8 @@ function parseArgs(argv: string[]): CliOptions {
     model: DEFAULT_MODEL,
     claudeBackend: "cli",
     claudeCliPath: DEFAULT_CLI_PATH,
-    deepDiveLabels: []
+    deepDiveLabels: [],
+    reopenLabels: []
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -92,6 +98,12 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "--deep-dive":
         opts.deepDiveLabels = next()
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        break;
+      case "--reopen":
+        opts.reopenLabels = next()
           .split(",")
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
@@ -199,6 +211,20 @@ async function main(): Promise<void> {
     }
   }
 
+  const reopen = resolveDeepDiveTopics(opts.reopenLabels, existing);
+  if (opts.reopenLabels.length > 0) {
+    if (reopen.resolved.length > 0) {
+      console.error(
+        `Re-review requested for: ${reopen.resolved.map((t) => `[${t.forestKind}] ${t.path.join(" > ")}`).join(", ")} (proficiency/evidence may update this run only; provenance stays frozen afterward unless re-reviewed again)`
+      );
+    }
+    if (reopen.notFound.length > 0) {
+      console.error(
+        `Re-review: label(s) not found in the existing forest, skipped: ${reopen.notFound.join(", ")}`
+      );
+    }
+  }
+
   let evidence = gatherGitEvidence(repo, opts.since, opts.maxCommits);
   if (opts.includePrompts) {
     evidence = evidence.concat(gatherPromptEvidence(repo));
@@ -226,7 +252,7 @@ async function main(): Promise<void> {
   });
   const raw = await callClaude(systemPrompt, userContent);
   const incoming = parseForestResponse(raw);
-  const merged = mergeForest(existing, incoming);
+  const merged = mergeForest(existing, incoming, reopen.resolved);
 
   fs.mkdirSync(path.dirname(opts.out), { recursive: true });
   fs.writeFileSync(opts.out, JSON.stringify(merged, null, 2) + "\n", "utf8");
