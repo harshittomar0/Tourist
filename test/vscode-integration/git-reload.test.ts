@@ -23,6 +23,8 @@ import { RealPersistenceAdapter } from "../../src/vscode-integration/persistence
 import { reconcileAfterGitChange, type OpenDocSnapshot } from "../../src/vscode-integration/git-reload.ts";
 import type { RepoBranchKey } from "../../src/vscode-integration/contracts.ts";
 import { computeStats, percentagesOf } from "../../src/vscode-integration/stats.ts";
+import { resolveGitContextFallback } from "../../src/persistence/index.ts";
+import type { VscodeGitAPI, VscodeGitRepository } from "../../src/persistence/vscodeGitTypes.ts";
 
 function git(cwd: string, args: string[]): string {
   return execFileSync(
@@ -403,5 +405,224 @@ describe("reconcileAfterGitChange (unit, fake deps)", () => {
       ]
     );
     expect(reloaded).toEqual(["/repo-a/a.ts"]);
+  });
+});
+
+/**
+ * The bug PR #11 claimed to fix but didn't: the disk-write handler in
+ * extension.ts eagerly calls `reconcileAfterGitChange` instead of waiting on
+ * BranchWatcher, but `resolveGitContext` -- what `restore` ultimately calls
+ * through `keyFor`/`resolveKey` -- prefers a real `vscodeGitApi`'s
+ * `repo.state.HEAD.name` whenever one is present (the actual production
+ * case). That value itself lags the real `git checkout` on disk by
+ * 1.2-3.5s (spike/FINDINGS.md Experiment 6), so calling `reconcileAfterGitChange`
+ * sooner doesn't close the gap -- it just asks the same stale source
+ * earlier. None of the tests above catch this because they construct
+ * `RealPersistenceAdapter` with no `vscodeGitApi` at all, so `resolveGitContext`
+ * always takes the raw-fs fallback -- never subject to this lag in the first
+ * place. This block constructs a `vscodeGitApi` mock whose `state.HEAD.name`
+ * is deliberately held stale after a real on-disk checkout, to reproduce the
+ * race for real.
+ */
+describe("disk-write reload race against a lagging vscodeGitApi", () => {
+  let repoDir: string;
+  let baseDir: string;
+  let docId: string;
+  let engine: AttributionEngine;
+  let mockHeadName: string;
+  let gitApi: VscodeGitAPI;
+  let persistence: RealPersistenceAdapter;
+  let folderKeyCache: Map<string, RepoBranchKey>;
+
+  function git(cwd: string, args: string[]): string {
+    return execFileSync(
+      "git",
+      ["-c", "user.name=Tourist Test", "-c", "user.email=tourist-test@example.com", ...args],
+      { cwd, encoding: "utf8" }
+    ).trim();
+  }
+
+  // Mirrors extension.ts's *old*, buggy `restoreFor`: resolves the key via
+  // `persistence.resolveKey`, which -- with a real `vscodeGitApi` present --
+  // prefers `repo.state.HEAD.name` over the filesystem.
+  async function restoreForLegacy(): Promise<{ key: RepoBranchKey; restored: Awaited<ReturnType<RealPersistenceAdapter["load"]>> }> {
+    const key = await persistence.resolveKey({ fsPath: repoDir, toString: () => repoDir });
+    folderKeyCache.set(repoDir, key);
+    const text = await readFile(docId, "utf8");
+    const restored = await persistence.load(docId, "", key, text);
+    return { key, restored };
+  }
+
+  // Mirrors extension.ts's *fixed* `restoreForDiskWrite`: resolves the key
+  // straight off `.git/HEAD` on disk, bypassing `vscodeGitApi` entirely,
+  // regardless of what the mock's `state.HEAD.name` currently claims.
+  async function restoreForDiskWrite(): Promise<{ key: RepoBranchKey; restored: Awaited<ReturnType<RealPersistenceAdapter["load"]>> }> {
+    const key = (await resolveGitContextFallback(docId)) ?? { repoRoot: repoDir, branch: "(no-repo)" };
+    folderKeyCache.set(repoDir, key);
+    const text = await readFile(docId, "utf8");
+    const restored = await persistence.load(docId, "", key, text);
+    return { key, restored };
+  }
+
+  beforeEach(async () => {
+    repoDir = await mkdtemp(join(tmpdir(), "tourist-git-reload-lag-repo-"));
+    baseDir = await mkdtemp(join(tmpdir(), "tourist-git-reload-lag-store-"));
+    git(repoDir, ["init", "-q", "-b", "main"]);
+    docId = join(repoDir, "file.txt");
+    folderKeyCache = new Map();
+
+    // A real `vscode.git`-shaped API whose `state.HEAD.name` is a plain,
+    // test-controlled variable rather than something that reacts to the
+    // real `git checkout` calls below -- exactly the lag under test: the
+    // real API only updates this asynchronously, well after the checkout
+    // completes on disk.
+    mockHeadName = "main";
+    const repo: VscodeGitRepository = {
+      rootUri: { fsPath: repoDir },
+      state: {
+        get HEAD() {
+          return { name: mockHeadName };
+        },
+        onDidChange: () => ({ dispose: () => {} }),
+      },
+    };
+    gitApi = {
+      repositories: [repo],
+      onDidOpenRepository: () => ({ dispose: () => {} }),
+      getRepository: (uri) => (uri.fsPath.startsWith(repoDir) ? repo : null),
+    };
+
+    engine = new AttributionEngine({ corroborationStore: new CorroborationStore() });
+    persistence = new RealPersistenceAdapter({
+      baseDir,
+      retentionDays: 30,
+      vscodeGitApi: gitApi,
+      getRepoRoots: () => [repoDir],
+      gitNotesConfig: () => ({ enabled: false, remote: "origin" }),
+    });
+  });
+
+  afterEach(async () => {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(baseDir, { recursive: true, force: true });
+  });
+
+  it("legacy restore (through vscodeGitApi) still reads the stale pre-checkout branch -- reproduces the bug", async () => {
+    const onMain = "line one\ntwo\nthree\n";
+    await writeFile(docId, onMain);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on main"]);
+    engine.open(docId, onMain, [
+      { startOffset: 0, endOffset: onMain.length, origin: "ai", tier: "2a", timestamp: Date.now() - 10_000 },
+    ]);
+    await persistence.save(docId, "", { repoRoot: repoDir, branch: "main" }, engine.getRanges(docId), onMain);
+
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    const onFeature = "totally different content on this branch\n";
+    await writeFile(docId, onFeature);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+
+    // The real checkout happens on disk right now -- `.git/HEAD` genuinely
+    // points at "feature" -- but `mockHeadName` (standing in for the real
+    // extension's lagging `repo.state.HEAD.name`) has NOT been updated yet,
+    // exactly like the 1.2-3.5s window per spike/FINDINGS.md Experiment 6.
+    git(repoDir, ["checkout", "-q", "feature"]);
+    expect(await readFile(docId, "utf8")).toBe(onFeature);
+    expect(mockHeadName).toBe("main"); // API hasn't caught up
+
+    const { key } = await restoreForLegacy();
+    // The bug: even though this restore ran *after* the real checkout, it
+    // still resolves "main" -- calling reconcileAfterGitChange sooner never
+    // helped, because the API it asks was always going to say "main" until
+    // its own lag elapses.
+    expect(key).toEqual({ repoRoot: repoDir, branch: "main" });
+  });
+
+  it("fix: restoreForDiskWrite resolves the real current branch despite the lagging vscodeGitApi", async () => {
+    const onMain = "line one\ntwo\nthree\n";
+    await writeFile(docId, onMain);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on main"]);
+    engine.open(docId, onMain, [
+      { startOffset: 0, endOffset: onMain.length, origin: "ai", tier: "2a", timestamp: Date.now() - 10_000 },
+    ]);
+    await persistence.save(docId, "", { repoRoot: repoDir, branch: "main" }, engine.getRanges(docId), onMain);
+
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    const onFeature = "totally different content on this branch\n";
+    await writeFile(docId, onFeature);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+
+    // Same lag setup as above: real checkout on disk, mock API still stale.
+    git(repoDir, ["checkout", "-q", "feature"]);
+    expect(await readFile(docId, "utf8")).toBe(onFeature);
+    expect(mockHeadName).toBe("main");
+
+    // Confirm this doc genuinely has no persisted history under "feature"
+    // yet, so a correct restore must come back undefined/unmarked here --
+    // not "main"'s AI-attributed content.
+    const { key, restored } = await restoreForDiskWrite();
+    expect(key).toEqual({ repoRoot: repoDir, branch: "feature" });
+    expect(restored).toBeUndefined();
+    expect(folderKeyCache.get(repoDir)).toEqual({ repoRoot: repoDir, branch: "feature" });
+
+    // Persist under the correctly-resolved "feature" key, then simulate the
+    // API finally catching up (as it eventually does, 1.2-3.5s later) --
+    // reconciling again afterwards must land on the exact same key, proving
+    // the fix isn't a race against the API updating either.
+    await persistence.save(docId, "", key, [{ startOffset: 0, endOffset: onFeature.length, origin: "external", tier: null, timestamp: Date.now() }], onFeature);
+    mockHeadName = "feature";
+    const afterApiCaughtUp = await restoreForDiskWrite();
+    expect(afterApiCaughtUp.key).toEqual({ repoRoot: repoDir, branch: "feature" });
+    expect(afterApiCaughtUp.restored?.some((r) => r.origin === "external")).toBe(true);
+
+    // And "main"'s persisted history is untouched -- no pollution from the
+    // race, matching the sibling suite's pollution-prevention assertions.
+    const mainAfter = await persistence.listPersisted({ repoRoot: repoDir, branch: "main" });
+    expect(mainAfter.find((d) => d.docId === docId)?.ranges).toHaveLength(1);
+  });
+
+  it("fix: reconcileAfterGitChange wired to restoreForDiskWrite reloads the engine with the correct branch's content, not the lagging API's", async () => {
+    const onMain = "line one\ntwo\nthree\n";
+    await writeFile(docId, onMain);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on main"]);
+    engine.open(docId, onMain, [
+      { startOffset: 0, endOffset: onMain.length, origin: "ai", tier: "2a", timestamp: Date.now() - 10_000 },
+    ]);
+    await persistence.save(docId, "", { repoRoot: repoDir, branch: "main" }, engine.getRanges(docId), onMain);
+
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    const onFeature = "totally different content on this branch\n";
+    await writeFile(docId, onFeature);
+    git(repoDir, ["add", "file.txt"]);
+    git(repoDir, ["commit", "-q", "-m", "on feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    git(repoDir, ["checkout", "-q", "feature"]);
+    expect(mockHeadName).toBe("main"); // still lagging
+
+    // Exactly the shape extension.ts's disk-write handler passes to
+    // `reconcileAfterGitChange`, with `restore` wired to the fixed
+    // `restoreForDiskWrite` instead of the legacy, API-preferring path.
+    const snapshot: OpenDocSnapshot = { docId, folderPath: repoDir, text: onFeature };
+    await reconcileAfterGitChange(
+      {
+        folderKeyCache,
+        restore: async (id) => (await restoreForDiskWrite()).restored,
+        reloadEngine: (id, text, restore) => void engine.reload(id, text, restore),
+      },
+      [repoDir],
+      [snapshot]
+    );
+
+    // Correctly unmarked for "feature" (no persisted history there yet) --
+    // not "main"'s carried-over "ai" attribution, which is what the
+    // pre-fix, API-preferring restore would have produced.
+    expect(engine.getRanges(docId).every((r) => r.origin === null)).toBe(true);
+    expect(folderKeyCache.get(repoDir)).toEqual({ repoRoot: repoDir, branch: "feature" });
   });
 });

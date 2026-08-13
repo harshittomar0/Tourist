@@ -33,7 +33,7 @@ import {
 import { AttributionEngine } from "./core/engine.ts";
 import { CorroborationStore } from "./core/corroboration-store.ts";
 import { hashContent } from "./core/index.ts";
-import { BranchWatcher } from "./persistence/index.ts";
+import { BranchWatcher, resolveGitContextFallback } from "./persistence/index.ts";
 import type { VscodeGitAPI, VscodeGitRepository } from "./persistence/vscodeGitTypes.ts";
 import { registerCommands } from "./vscode-integration/commands.ts";
 import { DirtyTracker, docIdFor, toNormalizedChangeBatch } from "./vscode-integration/change-listener.ts";
@@ -272,6 +272,36 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
     return persistence.load(docIdFor(doc.uri), simpleHash(text), key, text);
   }
 
+  /**
+   * Same as `restoreFor`, except the (repoRoot, branch) key is read straight
+   * off `.git/HEAD` on disk instead of through `keyFor`/`resolveKey` --
+   * which, whenever a real `vscode.git` API is present (the normal
+   * production case), prefers `repo.state.HEAD.name` over the filesystem.
+   * That API value itself lags the actual `git checkout` on disk by
+   * 1.2-3.5s (spike/FINDINGS.md Experiment 6: `repository.state.onDidChange`
+   * fires late for exactly this reason) -- re-resolving through it *earlier*
+   * (i.e. synchronously with the disk-write signal below, instead of
+   * waiting on BranchWatcher) still returns that same stale value, because
+   * the lag lives in the API itself, not in when we ask it. Only this
+   * caller -- the disk-write handler, which fires within milliseconds of
+   * the write and needs the key that matches *this* content right now --
+   * needs the fs read; `keyFor`'s other callers (persistDoc, folderScopes,
+   * BranchWatcher's own reload) keep the vscodeGitApi-preferred path, which
+   * is correct for them (BranchWatcher, in particular, only fires once the
+   * API's HEAD has already caught up).
+   */
+  async function restoreForDiskWrite(doc: vscode.TextDocument): Promise<AttributedRange[] | undefined> {
+    const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+    if (!folder) return undefined;
+    const key = (await resolveGitContextFallback(doc.uri.fsPath)) ?? {
+      repoRoot: folder.uri.fsPath,
+      branch: "(no-repo)",
+    };
+    folderKeyCache.set(folder.uri.fsPath, key);
+    const text = doc.getText();
+    return persistence.load(docIdFor(doc.uri), simpleHash(text), key, text);
+  }
+
   async function persistDoc(doc: vscode.TextDocument): Promise<void> {
     if (doc.uri.scheme !== "file" || !settings.isTrackingEnabled()) return;
     const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
@@ -447,14 +477,19 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
         // `reconcileAfterGitChange` (the same invalidate-then-restore
         // sequencing BranchWatcher's own callback uses, see git-reload.ts)
         // makes this doc's key resolution correct immediately, independent
-        // of BranchWatcher's timing entirely.
+        // of BranchWatcher's timing entirely. Restoring via
+        // `restoreForDiskWrite` rather than plain `restoreFor` closes the
+        // rest of the gap: re-running resolution sooner doesn't help if it
+        // still asks the same (still-lagging) vscodeGitApi, so this specific
+        // restore reads `.git/HEAD` directly instead -- see that function's
+        // doc comment.
         const folder = vscode.workspace.getWorkspaceFolder(event.document.uri);
         const reload = async (): Promise<void> => {
           if (folder) {
             await reconcileAfterGitChange(
               {
                 folderKeyCache,
-                restore: () => restoreFor(event.document),
+                restore: () => restoreForDiskWrite(event.document),
                 reloadEngine: (id, text, restored) => {
                   if (restored !== undefined) engine.reload(id, text, restored);
                   else engine.pushChanges(batch);
