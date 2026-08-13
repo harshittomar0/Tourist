@@ -17,10 +17,15 @@
  *     the existing confirm/reject/rename/addChild/delete/dot actions to
  *     vscode.postMessage, purely by DOM inspection (see its header comment
  *     for why that's possible without touching the original script), plus
- *     a checkbox multi-select + "Deep Dive on Selected" affordance.
+ *     a checkbox multi-select + "Deep Dive on Selected" affordance, plus a
+ *     "Re-review" affordance on confirmed/gap nodes specifically (see
+ *     buildProvenanceIndex below for why the bridge needs its own
+ *     provenance lookup to tell those nodes apart from "tracked" ones,
+ *     which render identically in the DOM).
  */
 import * as crypto from "node:crypto";
-import type { ForestFile, ForestKind, ForestNode } from "./types.ts";
+import { emptyForest } from "./types.ts";
+import type { ForestFile, ForestKind, ForestNode, Provenance } from "./types.ts";
 
 export function makeNonce(): string {
   return crypto.randomBytes(16).toString("base64");
@@ -68,6 +73,36 @@ function replaceSection(html: string, kind: ForestKind, data: UiNode[]): string 
   if (endIdx === -1) return html;
   const replacement = `var ${varName} = ${JSON.stringify(data)};`;
   return html.slice(0, startIdx) + replacement + html.slice(endIdx);
+}
+
+/**
+ * Maps every node's `kind|["path","segments"]` key (same encoding
+ * decorateRow's checkbox `selections` map already uses, and the same one
+ * forest/merge.ts's --reopen matching keys off of on the analyser side) to
+ * its stored provenance. ui/knowledge-forest.html's own renderRow only ever
+ * adds a DOM class for "ai" (`.prov-ai`) and "gap" (`.prov-gap`) -- there is
+ * no `.prov-confirmed`/`.prov-tracked`, so "confirmed" and "tracked" nodes
+ * are visually and structurally identical in the rendered DOM. The bridge
+ * script can't tell them apart by inspection alone, which matters because
+ * the "Re-review" affordance must appear on confirmed/gap nodes only, never
+ * on tracked ones. This index is computed here (where the real ForestFile
+ * is still available) and inlined into the bridge script as data, the same
+ * way injectRealForestData inlines the forest itself for the original
+ * script.
+ */
+function buildProvenanceIndex(forest: ForestFile): Record<string, Provenance> {
+  const index: Record<string, Provenance> = {};
+  const kinds: ForestKind[] = ["tech", "cs", "practice"];
+  const walk = (nodes: ForestNode[], kind: ForestKind, parentPath: string[]): void => {
+    for (const n of nodes) {
+      const path = [...parentPath, n.label];
+      index[`${kind}|${JSON.stringify(path)}`] = n.provenance;
+      walk(n.children, kind, path);
+      walk(n.latent, kind, path);
+    }
+  };
+  for (const kind of kinds) walk(forest[kind], kind, []);
+  return index;
 }
 
 export function injectRealForestData(html: string, forest: ForestFile): string {
@@ -124,9 +159,14 @@ export function injectContentSecurityPolicy(html: string, nonce: string, cspSour
  * user actually typed/decided, since the click handler that calls them is
  * the original (un-modified) one.
  */
-const OVERRIDE_BRIDGE_SOURCE = `
+function buildOverrideBridgeSource(provenanceIndexJson: string): string {
+  return `
 (function () {
   var vscodeApi = acquireVsCodeApi();
+  // kind|["path","segments"] -> provenance, built server-side by
+  // buildProvenanceIndex since the DOM alone can't distinguish "confirmed"
+  // from "tracked" -- see this module's header comment.
+  var PROVENANCE_INDEX = ${provenanceIndexJson};
 
   var lastPromptValue = null;
   var nativePrompt = window.prompt;
@@ -253,6 +293,32 @@ const OVERRIDE_BRIDGE_SOURCE = `
       updateDeepDiveBar();
     });
     row.insertBefore(cb, row.firstChild);
+
+    // ---- Re-review affordance (confirmed/gap nodes only) ------------------
+    // Explicit, one-time opt-in per node -- see types.ts's ReopenNodeMessage.
+    // Not shown for "ai" (already has confirm/reject) or "tracked" (already
+    // updates every run) -- only for "confirmed"/"gap", which PROVENANCE_INDEX
+    // is needed to tell apart from "tracked" (see this module's header
+    // comment on buildProvenanceIndex).
+    var path = pathFromRow(row);
+    if (path.length > 0) {
+      var provenance = PROVENANCE_INDEX[kind + "|" + JSON.stringify(path)];
+      if (provenance === "confirmed" || provenance === "gap") {
+        var reopenBtn = document.createElement("button");
+        reopenBtn.className = "icon-btn km-reopen-btn";
+        reopenBtn.type = "button";
+        reopenBtn.title = "Re-review: ask Claude to re-assess this node on the next run only (does not unfreeze it permanently)";
+        reopenBtn.textContent = "\u{1F501}";
+        reopenBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          var label = path[path.length - 1];
+          if (label) post({ type: "reopenNode", topic: label });
+        });
+        var actionsEl = row.querySelector(".row-actions");
+        if (actionsEl) actionsEl.appendChild(reopenBtn);
+        else row.appendChild(reopenBtn);
+      }
+    }
   }
 
   function decorateAll() {
@@ -311,9 +377,11 @@ const OVERRIDE_BRIDGE_SOURCE = `
   }
 })();
 `;
+}
 
-export function injectOverrideBridge(html: string, nonce: string): string {
-  const bridge = `<script nonce="${nonce}">${OVERRIDE_BRIDGE_SOURCE}</script>`;
+export function injectOverrideBridge(html: string, nonce: string, forest: ForestFile = emptyForest()): string {
+  const provenanceIndexJson = JSON.stringify(buildProvenanceIndex(forest));
+  const bridge = `<script nonce="${nonce}">${buildOverrideBridgeSource(provenanceIndexJson)}</script>`;
   return html.includes("</body>") ? html.replace("</body>", `${bridge}\n</body>`) : html + bridge;
 }
 
@@ -322,6 +390,6 @@ export function buildKnowledgeMapHtml(rawHtml: string, forest: ForestFile, cspSo
   let html = injectRealForestData(rawHtml, forest);
   html = injectTheme(html, theme);
   html = injectContentSecurityPolicy(html, nonce, cspSource);
-  html = injectOverrideBridge(html, nonce);
+  html = injectOverrideBridge(html, nonce, forest);
   return html;
 }

@@ -1,4 +1,4 @@
-import type { ForestFile, ForestNode } from "../types.js";
+import type { ForestFile, ForestKind, ForestNode, ReopenTarget } from "../types.js";
 
 /**
  * Merges a fresh analysis run into the existing forest, per
@@ -23,48 +23,75 @@ import type { ForestFile, ForestNode } from "../types.js";
  *    this is *why* the model is instructed to reuse exact existing labels).
  *  - Nothing is ever deleted. A node the incoming run didn't mention simply
  *    isn't touched — silence isn't evidence the skill went away.
+ *
+ * `reopen` is the --reopen flag's resolved targets (see cli.ts and
+ * forest/deepDive.ts's resolveDeepDiveTopics, reused for --reopen's
+ * resolution too): a one-time, this-call-only exception list. A confirmed/
+ * gap node whose exact path is in `reopen` is treated like a "tracked" node
+ * for *this* merge only — proficiency/evidence update from the fresh guess,
+ * but its provenance stays "confirmed"/"gap" (never rewritten to "tracked").
+ * Nothing about this is persisted on the node itself, so a later call to
+ * mergeForest that doesn't pass the same target again sees an ordinary
+ * confirmed/gap node and freezes it fully, exactly as before — the override
+ * only ever lives in this function's `reopen` argument for the run that
+ * requested it.
  */
-export function mergeForest(existing: ForestFile, incoming: ForestFile): ForestFile {
+export function mergeForest(existing: ForestFile, incoming: ForestFile, reopen: ReopenTarget[] = []): ForestFile {
+  const reopenKeys = new Set(reopen.map((t) => reopenKey(t.forestKind, t.path)));
   return {
-    tech: mergeNodeList(existing.tech, incoming.tech),
-    cs: mergeNodeList(existing.cs, incoming.cs),
-    practice: mergeNodeList(existing.practice, incoming.practice)
+    tech: mergeNodeList(existing.tech, incoming.tech, "tech", [], reopenKeys),
+    cs: mergeNodeList(existing.cs, incoming.cs, "cs", [], reopenKeys),
+    practice: mergeNodeList(existing.practice, incoming.practice, "practice", [], reopenKeys)
   };
 }
 
-function mergeNodeList(existing: ForestNode[], incoming: ForestNode[]): ForestNode[] {
+function reopenKey(forestKind: ForestKind, path: string[]): string {
+  return `${forestKind}:${path.join(">")}`;
+}
+
+function mergeNodeList(
+  existing: ForestNode[],
+  incoming: ForestNode[],
+  kind: ForestKind,
+  parentPath: string[],
+  reopenKeys: Set<string>
+): ForestNode[] {
   const merged = existing.map((node) => ({ ...node }));
 
   for (const incomingNode of incoming) {
     const idx = merged.findIndex((n) => n.label === incomingNode.label);
+    const path = [...parentPath, incomingNode.label];
     if (idx === -1) {
       merged.push(incomingNode);
       continue;
     }
 
     const current = merged[idx];
-    if (current.provenance === "confirmed" || current.provenance === "gap") {
+    const isReopened = reopenKeys.has(reopenKey(kind, path));
+
+    if ((current.provenance === "confirmed" || current.provenance === "gap") && !isReopened) {
       // Human decision stands. Still recurse into children/latent so a
       // *new sub-node* under a confirmed parent can still be proposed —
       // confirming "Django" doesn't confirm every framework feature
       // Django might grow in the future.
       merged[idx] = {
         ...current,
-        children: mergeNodeList(current.children, incomingNode.children),
-        latent: mergeNodeList(current.latent, incomingNode.latent)
+        children: mergeNodeList(current.children, incomingNode.children, kind, path, reopenKeys),
+        latent: mergeNodeList(current.latent, incomingNode.latent, kind, path, reopenKeys)
       };
       continue;
     }
 
-    if (current.provenance === "tracked") {
-      // Label and "tracked" status stand; proficiency/evidence track the
-      // fresh guess exactly like an "ai" node would (see types.ts).
+    if (current.provenance === "tracked" || isReopened) {
+      // Label and provenance stand; proficiency/evidence track the fresh
+      // guess exactly like an "ai" node would (see types.ts and, for the
+      // reopen case, ReopenTarget's doc comment above).
       merged[idx] = {
         ...current,
         proficiency: incomingNode.proficiency,
         evidence: incomingNode.evidence,
-        children: mergeNodeList(current.children, incomingNode.children),
-        latent: mergeNodeList(current.latent, incomingNode.latent)
+        children: mergeNodeList(current.children, incomingNode.children, kind, path, reopenKeys),
+        latent: mergeNodeList(current.latent, incomingNode.latent, kind, path, reopenKeys)
       };
       continue;
     }
@@ -72,8 +99,8 @@ function mergeNodeList(existing: ForestNode[], incoming: ForestNode[]): ForestNo
     // current.provenance === "ai": this run's guess supersedes the old one.
     merged[idx] = {
       ...incomingNode,
-      children: mergeNodeList(current.children, incomingNode.children),
-      latent: mergeNodeList(current.latent, incomingNode.latent)
+      children: mergeNodeList(current.children, incomingNode.children, kind, path, reopenKeys),
+      latent: mergeNodeList(current.latent, incomingNode.latent, kind, path, reopenKeys)
     };
   }
 

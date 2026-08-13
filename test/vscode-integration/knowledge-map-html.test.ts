@@ -92,6 +92,24 @@ describe("injectOverrideBridge", () => {
     expect(html).toContain("Deep Dive on Selected");
     expect(html.indexOf(`<script nonce="${nonce}">`)).toBeLessThan(html.indexOf("</body>"));
   });
+
+  it("inlines a PROVENANCE_INDEX built from the given forest", () => {
+    const nonce = "xyz789";
+    const forest: ForestFile = {
+      tech: [{ label: "Django", provenance: "confirmed", proficiency: 4, children: [], latent: [] }],
+      cs: [],
+      practice: [],
+    };
+    const html = injectOverrideBridge(FAKE_TEMPLATE, nonce, forest);
+    expect(html).toContain("PROVENANCE_INDEX");
+    expect(html).toContain('tech|[\\"Django\\"]');
+    expect(html).toContain("confirmed");
+  });
+
+  it("defaults to an empty forest's provenance index when none is given", () => {
+    const html = injectOverrideBridge(FAKE_TEMPLATE, "xyz789");
+    expect(html).toContain("var PROVENANCE_INDEX = {}");
+  });
 });
 
 describe("makeNonce", () => {
@@ -185,5 +203,70 @@ describe("deep-dive checkbox vs. theme (regression)", () => {
     const second = renderIntoDom("dark");
     await new Promise((r) => setTimeout(r, 20));
     expect(second.document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
+});
+
+// Coverage for the "Re-review" affordance: an explicit, one-time opt-in
+// action on confirmed/gap nodes specifically (never ai -- which already has
+// confirm/reject -- or tracked -- which already updates every run). These
+// render the actual ui/knowledge-forest.html through jsdom, since telling a
+// confirmed node apart from a tracked one is impossible from a string-only
+// test (see html.ts's buildProvenanceIndex doc comment: they're DOM-identical).
+describe("Re-review affordance (confirmed/gap nodes only)", () => {
+  function renderWithMixedProvenance(): { dom: JSDOM; document: Document; messages: unknown[] } {
+    const raw = readFileSync(REAL_TEMPLATE_PATH, "utf8");
+    const forest: ForestFile = {
+      tech: [
+        { label: "Django", provenance: "confirmed", proficiency: 4, children: [], latent: [] },
+        { label: "Security Fundamentals", provenance: "gap", proficiency: 0, children: [], latent: [] },
+        { label: "Redux", provenance: "ai", proficiency: 1, children: [], latent: [] },
+        { label: "Rust", provenance: "tracked", proficiency: 1, children: [], latent: [] },
+      ],
+      cs: [],
+      practice: [],
+    };
+    const html = buildKnowledgeMapHtml(raw, forest, "vscode-webview://source");
+    const messages: unknown[] = [];
+    const dom = new JSDOM(html, {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
+          postMessage: (msg: unknown) => messages.push(msg),
+          getState: () => undefined,
+          setState: () => {},
+        });
+      },
+    });
+    return { dom, document: dom.window.document, messages };
+  }
+
+  function findRowByLabel(document: Document, label: string): Element | null {
+    return (
+      Array.from(document.querySelectorAll(".node-row")).find(
+        (row) => row.querySelector(".label")?.textContent === label
+      ) ?? null
+    );
+  }
+
+  it("shows the Re-review button only on confirmed/gap nodes, not ai or tracked", async () => {
+    const { document } = renderWithMixedProvenance();
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(findRowByLabel(document, "Django")?.querySelector(".km-reopen-btn")).not.toBeNull();
+    expect(findRowByLabel(document, "Security Fundamentals")?.querySelector(".km-reopen-btn")).not.toBeNull();
+    expect(findRowByLabel(document, "Redux")?.querySelector(".km-reopen-btn")).toBeNull();
+    expect(findRowByLabel(document, "Rust")?.querySelector(".km-reopen-btn")).toBeNull();
+  });
+
+  it("posts a reopenNode message with the node's bare label when clicked", async () => {
+    const { document, messages } = renderWithMixedProvenance();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const btn = findRowByLabel(document, "Django")?.querySelector(".km-reopen-btn") as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+
+    expect(messages).toContainEqual({ type: "reopenNode", topic: "Django" });
   });
 });

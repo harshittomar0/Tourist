@@ -22,6 +22,11 @@ export interface KnowledgeMapPanelDeps {
    * the CLI run has finished (or been reported as unavailable/failed) so
    * the panel knows when it's safe to re-render from disk. */
   onDeepDive: (topics: string[]) => Promise<void>;
+  /** Runs a single-node re-review analyser pass (delegates to the same
+   * consent/backend/spawn flow, via `--reopen` -- see commands.ts's
+   * `runGenerateKnowledgeMap` and html.ts's "Re-review" affordance).
+   * Resolves once the CLI run has finished, same as `onDeepDive`. */
+  onReopen: (topic: string) => Promise<void>;
 }
 
 let currentPanel: vscode.WebviewPanel | undefined;
@@ -85,6 +90,13 @@ export async function showKnowledgeMapPanel(context: vscode.ExtensionContext, de
     if (message?.type === "deepDive") {
       if (!message.topics || message.topics.length === 0) return;
       await deps.onDeepDive(message.topics);
+      render(currentPanel, paths.htmlPath, paths.forestJsonPath);
+      return;
+    }
+
+    if (message?.type === "reopenNode") {
+      if (!message.topic) return;
+      await deps.onReopen(message.topic);
       render(currentPanel, paths.htmlPath, paths.forestJsonPath);
     }
   });

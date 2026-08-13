@@ -2,10 +2,10 @@
  * Registers "Tourist: Generate Knowledge Map" and "Tourist: Show Knowledge
  * Map". Owns the one piece of state that has to live above both commands:
  * `runGenerateKnowledgeMap` is shared between the command itself and the
- * webview's "Deep Dive on Selected" button (via panel.ts's `onDeepDive`
- * callback) specifically so the consent dialog and enabled-gate can never
- * be bypassed by triggering a run from the panel instead of the command
- * palette.
+ * webview's "Deep Dive on Selected" button and per-node "Re-review" button
+ * (via panel.ts's `onDeepDive`/`onReopen` callbacks) specifically so the
+ * consent dialog and enabled-gate can never be bypassed by triggering a run
+ * from the panel instead of the command palette.
  */
 import * as vscode from "vscode";
 import * as settings from "../settings.ts";
@@ -22,6 +22,7 @@ export function registerKnowledgeMapCommands(context: vscode.ExtensionContext): 
     vscode.commands.registerCommand("tourist.showKnowledgeMap", () =>
       showKnowledgeMapPanel(context, {
         onDeepDive: (topics) => runGenerateKnowledgeMap(context, { deepDiveTopics: topics }),
+        onReopen: (topic) => runGenerateKnowledgeMap(context, { reopenTopics: [topic] }),
       })
     )
   );
@@ -29,6 +30,9 @@ export function registerKnowledgeMapCommands(context: vscode.ExtensionContext): 
 
 export interface RunGenerateOptions {
   deepDiveTopics?: string[];
+  /** Node label(s) explicitly opted into re-review for this run only -- see
+   * html.ts's "Re-review" affordance and generate.ts's `--reopen` wiring. */
+  reopenTopics?: string[];
 }
 
 /**
@@ -98,9 +102,14 @@ export async function runGenerateKnowledgeMap(context: vscode.ExtensionContext, 
     claudeCliPath: settings.knowledgeMapClaudeCliPath(),
     model: settings.knowledgeMapModel(),
     deepDiveTopics: opts.deepDiveTopics,
+    reopenTopics: opts.reopenTopics,
   });
 
-  const label = opts.deepDiveTopics?.length ? `deep dive on ${opts.deepDiveTopics.join(", ")}` : "Knowledge Map";
+  const label = opts.reopenTopics?.length
+    ? `re-review of ${opts.reopenTopics.join(", ")}`
+    : opts.deepDiveTopics?.length
+      ? `deep dive on ${opts.deepDiveTopics.join(", ")}`
+      : "Knowledge Map";
   vscode.window.showInformationMessage(`Tourist: generating ${label}…`);
   const { code, stderr } = await runAnalyserCli(paths.cliJsPath, args, env);
 

@@ -47,6 +47,30 @@ describe("buildAnalyserArgs", () => {
     });
     expect(args).not.toContain("--deep-dive");
   });
+
+  it("appends --reopen with a comma-joined topic list only when topics are given", () => {
+    const args = buildAnalyserArgs({
+      repoRoot: "/repo",
+      forestJsonPath: "/repo/forest.json",
+      claudeBackend: "cli",
+      claudeCliPath: "claude",
+      model: "claude-sonnet-5",
+      reopenTopics: ["Django"],
+    });
+    expect(args.slice(-2)).toEqual(["--reopen", "Django"]);
+  });
+
+  it("omits --reopen when the topic list is empty", () => {
+    const args = buildAnalyserArgs({
+      repoRoot: "/repo",
+      forestJsonPath: "/repo/forest.json",
+      claudeBackend: "cli",
+      claudeCliPath: "claude",
+      model: "claude-sonnet-5",
+      reopenTopics: [],
+    });
+    expect(args).not.toContain("--reopen");
+  });
 });
 
 describe("looksLikeUnsupportedFlags", () => {
