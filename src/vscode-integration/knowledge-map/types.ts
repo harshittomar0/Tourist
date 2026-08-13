@@ -87,4 +87,31 @@ export interface ThemeChangedMessage {
   theme: string;
 }
 
-export type WebviewToExtensionMessage = NodeOverrideMessage | DeepDiveMessage | ReopenNodeMessage | ThemeChangedMessage;
+/** Sent when the user clicks one of the Dashboard's tab buttons (Phase 2 of
+ * UI_CONSOLIDATION_PLAN.md) -- see dashboard-tabs.ts's injected tab-strip
+ * script. `tab` is validated against `DASHBOARD_TABS` before use (see
+ * dashboard-tabs.ts's `nextDashboardTab`); an unrecognized value leaves the
+ * current tab selected rather than erroring. */
+export interface SwitchTabMessage {
+  type: "switchTab";
+  tab: string;
+}
+
+/** Sent by the Hook Setup/Git Notes Sync tabs' Install/Verify/Push/Fetch
+ * buttons (and, for Knowledge Map, its "Generate" affordance if surfaced
+ * there) -- see dashboard-tabs.ts's injected script. `action` maps 1:1 onto
+ * an already-registered `tourist.*` command in panel.ts's
+ * `handleDashboardAction`; no new business logic is introduced by this
+ * message type. */
+export interface DashboardActionMessage {
+  type: "dashboardAction";
+  action: string;
+}
+
+export type WebviewToExtensionMessage =
+  | NodeOverrideMessage
+  | DeepDiveMessage
+  | ReopenNodeMessage
+  | ThemeChangedMessage
+  | SwitchTabMessage
+  | DashboardActionMessage;

@@ -8,10 +8,11 @@
  * from the panel instead of the command palette.
  */
 import * as vscode from "vscode";
+import type { HookInstaller } from "../hook-install.ts";
 import * as settings from "../settings.ts";
 import { buildAnalyserArgs, looksLikeUnsupportedFlags, runAnalyserCli } from "./generate.ts";
+import { showDashboardPanel } from "./panel.ts";
 import { resolveAnalyserPaths } from "./paths.ts";
-import { showKnowledgeMapPanel } from "./panel.ts";
 
 const CONSENT_KEY = "tourist.knowledgeMap.consented";
 /** Separate one-time consent gate for `--include-prompts` specifically --
@@ -22,14 +23,32 @@ const CONSENT_KEY = "tourist.knowledgeMap.consented";
 const PROMPTS_CONSENT_KEY = "tourist.knowledgeMap.promptsConsented";
 const API_KEY_SECRET = "tourist.knowledgeMap.anthropicApiKey";
 
-export function registerKnowledgeMapCommands(context: vscode.ExtensionContext): void {
+export interface KnowledgeMapCommandDeps {
+  /** Read-only status source for the Dashboard's Hook Setup tab -- see
+   * panel.ts's `DashboardPanelDeps`. Not used for install/verify itself,
+   * which the tab dispatches to the existing `tourist.installHook`/
+   * `tourist.verifyHook` commands instead. */
+  hookInstaller: HookInstaller;
+  hookScriptPath: string;
+}
+
+export function registerKnowledgeMapCommands(context: vscode.ExtensionContext, deps: KnowledgeMapCommandDeps): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("tourist.generateKnowledgeMap", () => runGenerateKnowledgeMap(context)),
+    // Opens the Tourist Dashboard with the Knowledge Map tab selected (Phase
+    // 2 of UI_CONSOLIDATION_PLAN.md) -- the panel itself now also has Hook
+    // Setup and Git Notes Sync tabs, reachable from within the same webview.
     vscode.commands.registerCommand("tourist.showKnowledgeMap", () =>
-      showKnowledgeMapPanel(context, {
-        onDeepDive: (topics) => runGenerateKnowledgeMap(context, { deepDiveTopics: topics }),
-        onReopen: (topic) => runGenerateKnowledgeMap(context, { reopenTopics: [topic] }),
-      })
+      showDashboardPanel(
+        context,
+        {
+          onDeepDive: (topics) => runGenerateKnowledgeMap(context, { deepDiveTopics: topics }),
+          onReopen: (topic) => runGenerateKnowledgeMap(context, { reopenTopics: [topic] }),
+          hookInstaller: deps.hookInstaller,
+          hookScriptPath: deps.hookScriptPath,
+        },
+        "knowledge-map"
+      )
     )
   );
 }

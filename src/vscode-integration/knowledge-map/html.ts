@@ -162,7 +162,12 @@ export function injectContentSecurityPolicy(html: string, nonce: string, cspSour
 function buildOverrideBridgeSource(provenanceIndexJson: string): string {
   return `
 (function () {
-  var vscodeApi = acquireVsCodeApi();
+  // Guarded behind a window-level singleton because panel.ts's dashboard
+  // chrome (dashboard-tabs.ts's TAB_SWITCH_SCRIPT) shares this same document
+  // and also needs a vscode API handle -- acquireVsCodeApi() throws if
+  // called twice in one webview, so whichever script runs first wins and
+  // the other reuses it.
+  var vscodeApi = window.__touristVscodeApi || (window.__touristVscodeApi = acquireVsCodeApi());
   // kind|["path","segments"] -> provenance, built server-side by
   // buildProvenanceIndex since the DOM alone can't distinguish "confirmed"
   // from "tracked" -- see this module's header comment.
@@ -385,8 +390,13 @@ export function injectOverrideBridge(html: string, nonce: string, forest: Forest
   return html.includes("</body>") ? html.replace("</body>", `${bridge}\n</body>`) : html + bridge;
 }
 
-export function buildKnowledgeMapHtml(rawHtml: string, forest: ForestFile, cspSource: string, theme?: string): string {
-  const nonce = makeNonce();
+export function buildKnowledgeMapHtml(
+  rawHtml: string,
+  forest: ForestFile,
+  cspSource: string,
+  theme?: string,
+  nonce: string = makeNonce()
+): string {
   let html = injectRealForestData(rawHtml, forest);
   html = injectTheme(html, theme);
   html = injectContentSecurityPolicy(html, nonce, cspSource);

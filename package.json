@@ -150,8 +150,22 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tourist",
+          "title": "Tourist",
+          "icon": "resources/telescope.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "tourist": [
+        {
+          "id": "tourist.status",
+          "name": "Status",
+          "type": "webview"
+        },
         {
           "id": "tourist.workspaceAttribution",
           "name": "Attribution",

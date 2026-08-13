@@ -45,6 +45,7 @@ import { registerKnowledgeMapCommands } from "./vscode-integration/knowledge-map
 import { RealPersistenceAdapter } from "./vscode-integration/persistence-adapter.ts";
 import * as settings from "./vscode-integration/settings.ts";
 import { StatusBarController } from "./vscode-integration/status-bar.ts";
+import { TouristStatusViewProvider } from "./vscode-integration/status-view.ts";
 import { WorkspaceAttributionProvider, type RollupNode } from "./vscode-integration/workspace-view.ts";
 
 const SAVE_DEBOUNCE_MS = 2000;
@@ -249,9 +250,14 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
   const treeView = vscode.window.createTreeView("tourist.workspaceAttribution", { treeDataProvider: workspaceView });
   context.subscriptions.push(treeView);
 
+  const statusView = new TouristStatusViewProvider({ hookInstaller: hookLogReader, hookScriptPath });
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(TouristStatusViewProvider.viewType, statusView)
+  );
+
   async function refreshWorkspaceState(): Promise<void> {
     folderScopesSyncSnapshot = await folderScopes();
-    await Promise.all([workspaceView.refresh(), statusBar.refresh()]);
+    await Promise.all([workspaceView.refresh(), statusBar.refresh(), statusView.refresh()]);
   }
 
   function refreshEditorDecorations(editor: vscode.TextEditor): void {
@@ -490,6 +496,7 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
       if (!settings.affectsTouristConfig(event)) return;
       refreshVisibleDecorations();
       void statusBar.refresh();
+      void statusView.refresh();
     }),
 
     // Flush any pending debounced saves so nothing's lost when the window closes.
@@ -518,7 +525,7 @@ export function activate(context: vscode.ExtensionContext): TouristTestApi {
     refreshStatusBar: () => statusBar.refresh(),
   });
 
-  registerKnowledgeMapCommands(context);
+  registerKnowledgeMapCommands(context, { hookInstaller: hookLogReader, hookScriptPath });
 
   return {
     getAttributedRanges: (docId: string) => engine.getRanges(docId),
